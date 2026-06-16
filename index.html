@@ -297,20 +297,19 @@ async function processFiles(){
       }
       if(!y1&&!y2)return;
       if(y1===100||y2===100){
-        // Track that we've seen a 100% line
         contractMap[currentRef].has100=true;
-        if(!contractMap[currentRef].y1_outb_rate)contractMap[currentRef].warning='100';
-        else contractMap[currentRef].warning='mixed'; // already has valid rate = mixed
+        // If valid rate already found -> mixed, else 100 only
+        contractMap[currentRef].warning=contractMap[currentRef].y1_outb_rate?'mixed':'100';
         return;
       }
+      // Valid rate line
       if(!contractMap[currentRef].y1_outb_rate){
         contractMap[currentRef].y1_outb_rate=y1;
         contractMap[currentRef].y2_outb_rate=y2;
         contractMap[currentRef].first_invoice_date=firstInvDate;
-        // If we already saw a 100% line before this valid rate = mixed
-        if(contractMap[currentRef].has100)contractMap[currentRef].warning='mixed';
-        else contractMap[currentRef].warning=false;
       }
+      // Always recompute warning: mixed if 100% line also seen
+      contractMap[currentRef].warning=contractMap[currentRef].has100?'mixed':false;
     });
 
     // Build invoice rows — pass 1 : résolution directe FR-AFR
