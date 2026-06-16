@@ -192,9 +192,11 @@ tr:hover td{background:#fafaf8}
           <th style="width:150px">Client</th>
           <th style="width:140px">Entité facturation</th>
           <th style="width:120px">BD</th>
-          <th class="r" style="width:90px">Montant</th>
-          <th class="r" style="width:68px">Taux %</th>
+          <th class="r" style="width:85px">Fact.</th>
+          <th class="r" style="width:85px">Brut</th>
+          <th class="r" style="width:55px">Taux %</th>
           <th class="r" style="width:90px">Commission</th>
+          <th style="width:60px">Statut</th>
         </tr></thead>
         <tbody id="detailBody"></tbody>
       </table>
@@ -250,6 +252,13 @@ function extractContractRef(ref){
   return m?m[0]:'';
 }
 
+function extractOriginInvoice(ref){
+  if(!ref)return'';
+  // "Extourne de : RET-S/2026/00182, ..." ou "Extourne de : RRET-S/2026/00038, ..."
+  const m=String(ref).match(/Extourne de\s*:\s*([A-Z\-\/0-9]+)/i);
+  return m?m[1].trim():'';
+}
+
 function formatDate(d){
   if(!d)return'';
   if(d instanceof Date)return d.toISOString().slice(0,10);
@@ -267,21 +276,46 @@ async function processFiles(){
   try{
     const [invRows,ctRows]=await Promise.all([parseXLSX(files.invoices),parseXLSX(files.contracts)]);
 
-    // Build contract map — find columns flexibly
+    // Build contract map with y1/y2 outb rate logic
     const contractMap={};
+    let currentRef='';
     ctRows.forEach(r=>{
       const ref=String(r['Contract Reference']||r['sale_contract_id']||'').trim();
-      if(!ref||contractMap[ref])return;
-      contractMap[ref]={
-        salesperson:String(r['Salesperson']||r['user_id']||'').trim(),
-        commission:parseFloat(r['BD Commission (in %)'||r['bd_comission']]||r['bd_comission']||0)||0,
-        customer:String(r['Customer']||r['partner_id']||'').trim(),
-        invoicing_entity:String(r['Invoicing Entity']||r['invoicing_entity']||'').trim(),
-      };
+      if(ref)currentRef=ref;
+      if(!currentRef)return;
+      const y1=parseFloat(r['Order Lines/Retrocession Rule/Y1 Outb Rate']||r['y1_outb_rate']||0)||0;
+      const y2=parseFloat(r['Order Lines/Retrocession Rule/Y2 Outb Rate']||r['y2_outb_rate']||0)||0;
+      const firstInvDate=r['Order Lines/First Invoice Date']||r['historical_in_start_date']||null;
+      if(ref&&!contractMap[currentRef]){
+        contractMap[currentRef]={
+          salesperson:String(r['Salesperson']||'').trim(),
+          commission:parseFloat(r['BD Commission (in %)']||0)||0,
+          customer:String(r['Customer']||'').trim(),
+          invoicing_entity:String(r['Invoicing Entity']||'').trim(),
+          y1_outb_rate:null,y2_outb_rate:null,first_invoice_date:null,warning:false,
+        };
+      }
+      if(!y1&&!y2)return;
+      if(y1===100||y2===100){
+        // Track that we've seen a 100% line
+        contractMap[currentRef].has100=true;
+        if(!contractMap[currentRef].y1_outb_rate)contractMap[currentRef].warning='100';
+        else contractMap[currentRef].warning='mixed'; // already has valid rate = mixed
+        return;
+      }
+      if(!contractMap[currentRef].y1_outb_rate){
+        contractMap[currentRef].y1_outb_rate=y1;
+        contractMap[currentRef].y2_outb_rate=y2;
+        contractMap[currentRef].first_invoice_date=firstInvDate;
+        // If we already saw a 100% line before this valid rate = mixed
+        if(contractMap[currentRef].has100)contractMap[currentRef].warning='mixed';
+        else contractMap[currentRef].warning=false;
+      }
     });
 
-    // Build invoice rows
-    allData=invRows.map(r=>{
+    // Build invoice rows — pass 1 : résolution directe FR-AFR
+    const invoiceToContract={};
+    const rawRows=invRows.map(r=>{
       const number=String(r['Number']||r['name']||'');
       const dateRaw=r['Invoice/Bill Date']||r['invoice_date']||'';
       const date=formatDate(dateRaw);
@@ -289,11 +323,43 @@ async function processFiles(){
       const ref=String(r['Reference']||r['ref']||'');
       const amount=parseFloat(r['Total in Currency Signed']||r['amount_untaxed']||0)||0;
       const contractRef=extractContractRef(ref);
+      const originInvoice=extractOriginInvoice(ref);
       const contract=contractMap[contractRef]||{};
-      const bd=contract.salesperson||'';
-      const rate=contract.commission||0;
-      return{number,date,month,ref,contractRef,amount,customer:contract.customer||'',invoicing_entity:contract.invoicing_entity||'',bd,rate,commission:amount*(rate/100),has_contract:!!(contractRef&&bd)};
+      if(contractRef&&contract.salesperson)invoiceToContract[number]=contractRef;
+      // Compute gross amount using y1/y2 outb rate and first invoice date
+      let grossAmount=amount;
+      let outbRate=null;
+      let warning=contract.warning||false;
+      if(contract.y1_outb_rate&&contract.first_invoice_date&&amount){
+        const firstDate=new Date(contract.first_invoice_date);
+        const invDate=new Date(date);
+        const diffYears=(invDate-firstDate)/(1000*60*60*24*365);
+        outbRate=diffYears<1?contract.y1_outb_rate:contract.y2_outb_rate;
+        if(outbRate&&outbRate>0&&outbRate<100)grossAmount=amount/(outbRate/100);
+      }
+      return{number,date,month,ref,contractRef,originInvoice,amount,grossAmount,outbRate,warning,customer:contract.customer||'',invoicing_entity:contract.invoicing_entity||'',bd:contract.salesperson||'',rate:contract.commission||0,has_contract:!!(contractRef&&contract.salesperson)};
     }).filter(r=>r.number);
+
+    // Pass 2 : extournes — remonter via la facture origine
+    allData=rawRows.map(r=>{
+      if(!r.has_contract&&r.originInvoice){
+        const originRef=invoiceToContract[r.originInvoice];
+        if(originRef){
+          const contract=contractMap[originRef]||{};
+          if(contract.salesperson){
+            let grossAmount=r.amount;let outbRate=null;let warning=contract.warning||false;
+            if(contract.y1_outb_rate&&contract.first_invoice_date&&r.amount){
+              const firstDate=new Date(contract.first_invoice_date);const invDate=new Date(r.date);
+              const diffYears=(invDate-firstDate)/(1000*60*60*24*365);
+              outbRate=diffYears<1?contract.y1_outb_rate:contract.y2_outb_rate;
+              if(outbRate&&outbRate>0&&outbRate<100)grossAmount=r.amount/(outbRate/100);
+            }
+            return{...r,contractRef:originRef,grossAmount,outbRate,warning,customer:contract.customer||'',invoicing_entity:contract.invoicing_entity||'',bd:contract.salesperson||'',rate:contract.commission||0,has_contract:true};
+          }
+        }
+      }
+      return r;
+    });
 
     if(!allData.length)throw new Error('Aucune ligne trouvée dans le fichier factures.');
     rateOverrides={};
@@ -323,7 +389,7 @@ function getFiltered(){
 }
 
 function computeRate(r){return rateOverrides[r.number]!==undefined?rateOverrides[r.number]:r.rate}
-function computeCom(r){return r.amount*(computeRate(r)/100)}
+function computeCom(r){return(r.grossAmount||r.amount)*(computeRate(r)/100)}
 
 // ---- RENDER ----
 function fmtEur(n){return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n)}
@@ -335,7 +401,7 @@ function render(){
   const allBDs=[...new Set(allData.filter(r=>r.bd).map(r=>r.bd))].sort();
 
   let totAmt=0,totCom=0,matchCt=0;
-  rows.forEach(r=>{totAmt+=r.amount;totCom+=computeCom(r);if(r.has_contract)matchCt++;});
+  rows.forEach(r=>{totAmt+=(r.grossAmount||r.amount);totCom+=computeCom(r);if(r.has_contract)matchCt++;});
 
   document.getElementById('mTotal').textContent=fmtEur(totAmt);
   document.getElementById('mNb').textContent=rows.length+' factures';
@@ -366,7 +432,7 @@ function renderSynth(rows,allBDs){
     if(!r.bd)return;
     const rate=computeRate(r);const com=computeCom(r);
     if(!map[r.bd])map[r.bd]={count:0,amt:0,com:0,rates:[]};
-    map[r.bd].count++;map[r.bd].amt+=r.amount;map[r.bd].com+=com;
+    map[r.bd].count++;map[r.bd].amt+=(r.grossAmount||r.amount);map[r.bd].com+=com;
     if(rate>0)map[r.bd].rates.push(rate);
   });
   const bds=Object.keys(map).sort((a,b)=>map[b].com-map[a].com);
@@ -396,8 +462,10 @@ function renderDetail(rows,allBDs){
       <td title="${r.invoicing_entity}">${r.invoicing_entity?shortEntity(r.invoicing_entity):'<span class="muted">—</span>'}</td>
       <td>${r.bd?`<span class="av" style="background:${bg};color:${col}">${initials(r.bd)}</span>${r.bd}`:'<span class="muted">—</span>'}</td>
       <td class="r" style="${r.amount<0?'color:#A32D2D':''}">${fmtEur(r.amount)}</td>
+      <td class="r">${r.grossAmount&&r.grossAmount!==r.amount?'<span style="font-weight:600">'+fmtEur(r.grossAmount)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+((r.outbRate||0).toFixed(0))+'%)</span>':'<span class="muted">—</span>'}</td>
       <td class="r"><input class="edit-rate" type="number" min="0" max="100" step="0.5" value="${rate}" data-num="${r.number}" onchange="updateRate(this)"></td>
       <td class="r" style="font-weight:600">${com?fmtEur(com):'—'}</td>
+      <td>${r.warning==='100'?'<span class="badge br" title="Seules des lignes à 100% trouvées — pas de taux valide">❌ 100%</span>':r.warning==='mixed'?'<span class="badge ba" title="Contrat mixte : lignes 100% ET lignes valides — taux valide utilisé">⚠️ Mixte</span>':'<span class="badge bg">✓</span>'}</td>
     </tr>`;
   }).join('');
 }
