@@ -115,10 +115,22 @@ tr:hover td{background:#fafaf8}
       <div class="dz-file" id="contractFileName"></div>
     </div>
   </div>
+  <div class="upload-grid" style="max-width:600px;width:100%">
+    <div class="drop-zone" id="dzSO" ondragover="onDragOver(event,'dzSO')" ondragleave="onDragLeave('dzSO')" ondrop="onDrop(event,'so')">
+      <input type="file" accept=".xlsx,.xls,.csv" onchange="onFileInput(event,'so')">
+      <span class="dz-icon">🛒</span>
+      <div class="dz-label">Export Sales Orders</div>
+      <div class="dz-sub">Ventes › Commandes › Exporter</div>
+      <div class="dz-file" id="soFileName"></div>
+    </div>
+    <div style="background:#f5f5f3;border-radius:12px;padding:1.5rem;display:flex;align-items:center;justify-content:center;font-size:12px;color:#aaa;text-align:center;line-height:1.6">
+      Requis pour les factures<br><strong style="color:#888">INV/XXXX</strong><br>Name, Sale Contract,<br>Order Reference
+    </div>
+  </div>
 
   <div style="background:#fff;border:1px solid #e5e5e3;border-radius:10px;padding:1rem 1.25rem;max-width:600px;width:100%">
     <div style="font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Colonnes requises dans les exports</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;font-size:12px;color:#555">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;font-size:12px;color:#555">
       <div>
         <div style="font-weight:600;margin-bottom:.35rem">📄 Factures</div>
         <ul style="list-style:none;padding:0;line-height:1.8">
@@ -139,6 +151,14 @@ tr:hover td{background:#fafaf8}
           <li>· Order Lines/Retrocession Rule/Y1 Outb Rate</li>
           <li>· Order Lines/Retrocession Rule/Y2 Outb Rate</li>
           <li>· Order Lines/First Invoice Date</li>
+        </ul>
+      </div>
+      <div>
+        <div style="font-weight:600;margin-bottom:.35rem">🛒 Sales Orders <span style="font-weight:400;color:#aaa">(optionnel)</span></div>
+        <ul style="list-style:none;padding:0;line-height:1.8">
+          <li>· Order Reference</li>
+          <li>· Sale Contract</li>
+          <li>· Customer</li>
         </ul>
       </div>
     </div>
@@ -228,7 +248,7 @@ tr:hover td{background:#fafaf8}
 const COLORS=['#378ADD','#1D9E75','#D85A30','#7F77DD','#BA7517','#D4537E','#639922','#E24B4A','#888780','#5DCAA5'];
 const BGCOL=['#E6F1FB','#E1F5EE','#FAECE7','#EEEDFE','#FAEEDA','#FBEAF0','#EAF3DE','#FCEBEB','#F1EFE8','#9FE1CB'];
 
-let files={invoices:null,contracts:null};
+let files={invoices:null,contracts:null,so:null};
 let allData=[];
 let rateOverrides={};
 let chartInst=null;
@@ -241,10 +261,10 @@ function onFileInput(e,type){const f=e.target.files[0];if(f)handleFile(f,type)}
 
 function handleFile(file,type){
   files[type]=file;
-  const nameEl=document.getElementById(type==='invoices'?'invoiceFileName':'contractFileName');
-  const dzEl=document.getElementById(type==='invoices'?'dzInvoices':'dzContracts');
-  nameEl.textContent='✓ '+file.name;
-  dzEl.classList.add('done');
+  const nameMap={invoices:'invoiceFileName',contracts:'contractFileName',so:'soFileName'};
+  const dzMap={invoices:'dzInvoices',contracts:'dzContracts',so:'dzSO'};
+  document.getElementById(nameMap[type]).textContent='✓ '+file.name;
+  document.getElementById(dzMap[type]).classList.add('done');
   document.getElementById('loadBtn').disabled=!(files.invoices&&files.contracts);
   document.getElementById('uploadError').style.display='none';
 }
@@ -294,7 +314,9 @@ async function processFiles(){
   document.getElementById('loadBtn').textContent='Chargement…';
   document.getElementById('uploadError').style.display='none';
   try{
-    const [invRows,ctRows]=await Promise.all([parseXLSX(files.invoices),parseXLSX(files.contracts)]);
+    const promises=[parseXLSX(files.invoices),parseXLSX(files.contracts)];
+    if(files.so)promises.push(parseXLSX(files.so));
+    const [invRows,ctRows,soRows=[]]=await Promise.all(promises);
 
     // Build contract map with y1/y2 outb rate logic
     const contractMap={};
@@ -332,6 +354,14 @@ async function processFiles(){
       contractMap[currentRef].warning=contractMap[currentRef].has100?'mixed':false;
     });
 
+    // Build SO map: SO number -> contract ref
+    const soMap={};
+    (soRows||[]).forEach(r=>{
+      const soNum=String(r['Order Reference']||r['name']||'').trim();
+      const contractRef=String(r['Sale Contract']||'').trim();
+      if(soNum&&contractRef&&!soMap[soNum])soMap[soNum]=contractRef;
+    });
+
     // Build invoice rows — pass 1 : résolution directe FR-AFR
     const invoiceToContract={};
     const rawRows=invRows.map(r=>{
@@ -341,8 +371,13 @@ async function processFiles(){
       const month=date?date.slice(0,7):'';
       const ref=String(r['Reference']||r['ref']||'');
       const amount=parseFloat(r['Total in Currency Signed']||r['amount_untaxed']||0)||0;
-      const contractRef=extractContractRef(ref);
+      let contractRef=extractContractRef(ref);
       const originInvoice=extractOriginInvoice(ref);
+      // For INV invoices: look up contract via SO number in Origin field
+      const soNumber=String(r['Origin']||'').trim();
+      if(!contractRef&&number.startsWith('INV')&&soNumber&&soMap[soNumber]){
+        contractRef=soMap[soNumber];
+      }
       const contract=contractMap[contractRef]||{};
       if(contractRef&&contract.salesperson)invoiceToContract[number]=contractRef;
       // Compute gross amount using y1/y2 outb rate and first invoice date
@@ -465,15 +500,27 @@ function renderSynth(rows,allBDs){
   }).join('')+`<tr class="trow-tot"><td>Total</td><td class="r">${tN}</td><td class="r">${fmtEur(tA)}</td><td class="r">${fmtEur(tC)}</td><td class="r">—</td></tr>`;
 }
 
+function sortRows(rows){
+  return [...rows].sort((a,b)=>{
+    const ga=a.outbRate===null||a.outbRate===undefined?99:(a.outbRate>=30?0:a.outbRate>0?1:2);
+    const gb=b.outbRate===null||b.outbRate===undefined?99:(b.outbRate>=30?0:b.outbRate>0?1:2);
+    return ga-gb;
+  });
+}
 function renderDetail(rows,allBDs){
+  rows=sortRows(rows);
   const tbody=document.getElementById('detailBody');
   if(!rows.length){tbody.innerHTML=`<tr><td colspan="9" class="no-data">Aucune facture</td></tr>`;return;}
+  let lastGroup=null;
   tbody.innerHTML=rows.map(r=>{
     const rate=computeRate(r);const com=computeCom(r);
+    const group=r.outbRate>=30?'Y1 (30%)':r.outbRate>0?'Y2 (20%)':'Sans taux';
+    const sep=group!==lastGroup?(lastGroup!==null?`<tr><td colspan="11" style="padding:4px 10px;font-size:11px;font-weight:600;color:#888;background:#f5f5f3;border-bottom:1px solid #e5e5e3;letter-spacing:.04em;text-transform:uppercase">${group}</td></tr>`:`<tr><td colspan="11" style="padding:4px 10px;font-size:11px;font-weight:600;color:#888;background:#f5f5f3;border-bottom:1px solid #e5e5e3;letter-spacing:.04em;text-transform:uppercase">${group}</td></tr>`):'';
+    lastGroup=group;
     const idx=allBDs.indexOf(r.bd);
     const bg=BGCOL[idx>=0?idx%BGCOL.length:9];const col=COLORS[idx>=0?idx%COLORS.length:9];
     const amtCls=r.amount<0?'br':'bb';
-    return`<tr>
+    return sep+`<tr>
       <td title="${r.number}"><span class="badge ${amtCls}">${r.number}</span></td>
       <td style="color:#888">${r.date}</td>
       <td>${r.contractRef?`<span class="badge ba">${r.contractRef}</span>`:'<span class="muted">—</span>'}</td>
@@ -531,11 +578,13 @@ function exportCSV(){
 
 // ---- RESET ----
 function resetDashboard(){
-  files={invoices:null,contracts:null};allData=[];rateOverrides={};
+  files={invoices:null,contracts:null,so:null};allData=[];rateOverrides={};
   document.getElementById('invoiceFileName').textContent='';
   document.getElementById('contractFileName').textContent='';
+  document.getElementById('soFileName').textContent='';
   document.getElementById('dzInvoices').classList.remove('done');
   document.getElementById('dzContracts').classList.remove('done');
+  document.getElementById('dzSO').classList.remove('done');
   document.getElementById('loadBtn').disabled=true;
   document.getElementById('dashboard').style.display='none';
   document.getElementById('uploadScreen').style.display='flex';
