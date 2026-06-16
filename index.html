@@ -1,6 +1,458 @@
-git clone https://github.com/catrouremi88/altios-commission-dashboard
-cd altios-commission-dashboard
-# copie index.html ici
-git add index.html
-git commit -m "init dashboard"
-git push
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Altios — Commissions BD</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f3;color:#1a1a1a;font-size:14px}
+a{color:inherit}
+
+/* HEADER */
+.header{background:#fff;border-bottom:1px solid #e5e5e3;padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:52px}
+.header-logo{font-size:15px;font-weight:600;letter-spacing:.02em;color:#1a1a1a}
+.header-logo span{color:#378ADD}
+
+/* UPLOAD SCREEN */
+.upload-screen{min-height:calc(100vh - 52px);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;gap:2rem}
+.upload-title{font-size:22px;font-weight:500;text-align:center;color:#1a1a1a}
+.upload-sub{font-size:14px;color:#666;text-align:center;max-width:440px;line-height:1.6}
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;width:100%;max-width:600px}
+.drop-zone{background:#fff;border:1.5px dashed #d0d0cc;border-radius:12px;padding:2rem 1.5rem;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;position:relative}
+.drop-zone:hover,.drop-zone.over{border-color:#378ADD;background:#f0f7ff}
+.drop-zone.done{border-color:#1D9E75;border-style:solid;background:#f0faf6}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.dz-icon{font-size:28px;margin-bottom:.6rem;display:block}
+.dz-label{font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:.3rem}
+.dz-sub{font-size:12px;color:#888}
+.dz-file{font-size:12px;color:#1D9E75;font-weight:500;margin-top:.4rem}
+.btn-primary{background:#378ADD;color:#fff;border:none;border-radius:8px;padding:.7rem 2rem;font-size:14px;font-weight:500;cursor:pointer;transition:background .15s}
+.btn-primary:hover{background:#185FA5}
+.btn-primary:disabled{background:#c0c0c0;cursor:not-allowed}
+.upload-error{color:#A32D2D;background:#FCEBEB;border-radius:8px;padding:.6rem 1rem;font-size:13px;max-width:600px;text-align:center}
+
+/* DASHBOARD */
+.dashboard{display:none;padding:1.5rem 2rem;max-width:1200px;margin:0 auto}
+.dash-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1.25rem}
+.dash-title{font-size:18px;font-weight:500}
+.dash-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn-secondary{background:#fff;border:1px solid #d0d0cc;border-radius:8px;padding:.45rem 1rem;font-size:13px;cursor:pointer;transition:background .15s}
+.btn-secondary:hover{background:#f5f5f3}
+
+/* FILTERS */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.25rem}
+select{font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #d0d0cc;background:#fff;color:#1a1a1a;cursor:pointer}
+
+/* METRICS */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:1.25rem}
+.mc{background:#fff;border-radius:10px;padding:.9rem 1rem;border:1px solid #e5e5e3}
+.mc-l{font-size:12px;color:#888;margin-bottom:4px}
+.mc-v{font-size:22px;font-weight:500;color:#1a1a1a}
+.mc-s{font-size:11px;color:#aaa;margin-top:2px}
+
+/* CARDS */
+.card{background:#fff;border:1px solid #e5e5e3;border-radius:12px;padding:1.25rem;margin-bottom:1rem;overflow:hidden}
+.card-title{font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:1rem}
+
+/* CHART */
+.chart-wrap{position:relative;width:100%;height:220px}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+.legend span{display:flex;align-items:center;gap:5px;font-size:12px;color:#555}
+.ldot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+
+/* TABLE */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+th{text-align:left;padding:8px 10px;color:#888;font-weight:500;border-bottom:1px solid #e5e5e3;font-size:11px;white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid #f0f0ee;color:#1a1a1a;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafaf8}
+.r{text-align:right}
+.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:500}
+.bb{background:#E6F1FB;color:#0C447C}
+.ba{background:#FAEEDA;color:#633806}
+.br{background:#FCEBEB;color:#791F1F}
+.bg{background:#EAF3DE;color:#27500A}
+.av{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0;vertical-align:middle;margin-right:6px}
+.trow-tot td{font-weight:600;border-top:2px solid #e5e5e3;background:#fafaf8}
+.edit-rate{width:55px;font-size:12px;padding:3px 6px;border-radius:6px;border:1px solid #d0d0cc;background:#fff;color:#1a1a1a;text-align:right}
+.edit-rate:focus{outline:none;border-color:#378ADD;box-shadow:0 0 0 3px rgba(55,138,221,.15)}
+.muted{color:#bbb;font-size:11px}
+.info-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#888;background:#f5f5f3;padding:3px 9px;border-radius:6px}
+.no-data{text-align:center;padding:2rem;color:#aaa;font-size:13px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="header-logo">Altios <span>·</span> Commissions BD</span>
+  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée</span>
+</div>
+
+<!-- UPLOAD SCREEN -->
+<div class="upload-screen" id="uploadScreen">
+  <div>
+    <div class="upload-title">Dashboard Commissions BD</div>
+    <div class="upload-sub" style="margin-top:.5rem">Exportez les deux fichiers depuis Odoo et déposez-les ci-dessous. Tout le calcul se fait dans votre navigateur.</div>
+  </div>
+
+  <div class="upload-grid">
+    <div class="drop-zone" id="dzInvoices" ondragover="onDragOver(event,'dzInvoices')" ondragleave="onDragLeave('dzInvoices')" ondrop="onDrop(event,'invoices')">
+      <input type="file" accept=".xlsx,.xls,.csv" onchange="onFileInput(event,'invoices')">
+      <span class="dz-icon">🧾</span>
+      <div class="dz-label">Export Factures</div>
+      <div class="dz-sub">Comptabilité › Clients › Factures</div>
+      <div class="dz-file" id="invoiceFileName"></div>
+    </div>
+    <div class="drop-zone" id="dzContracts" ondragover="onDragOver(event,'dzContracts')" ondragleave="onDragLeave('dzContracts')" ondrop="onDrop(event,'contracts')">
+      <input type="file" accept=".xlsx,.xls,.csv" onchange="onFileInput(event,'contracts')">
+      <span class="dz-icon">📋</span>
+      <div class="dz-label">Export Contrats</div>
+      <div class="dz-sub">Sale Contract › Exporter</div>
+      <div class="dz-file" id="contractFileName"></div>
+    </div>
+  </div>
+
+  <div style="background:#fff;border:1px solid #e5e5e3;border-radius:10px;padding:1rem 1.25rem;max-width:600px;width:100%">
+    <div style="font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.6rem">Colonnes requises dans les exports</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;font-size:12px;color:#555">
+      <div>📄 <strong>Factures :</strong> Number, Invoice/Bill Date, Reference, Total in Currency Signed</div>
+      <div>📋 <strong>Contrats :</strong> Contract Reference, Customer, Invoicing Entity, Salesperson, BD Commission (in %)</div>
+    </div>
+  </div>
+
+  <div id="uploadError" class="upload-error" style="display:none"></div>
+  <button class="btn-primary" id="loadBtn" disabled onclick="processFiles()">Générer le dashboard →</button>
+</div>
+
+<!-- DASHBOARD -->
+<div class="dashboard" id="dashboard">
+  <div class="dash-header">
+    <span class="dash-title">Commissions BD</span>
+    <div class="dash-actions">
+      <button class="btn-secondary" onclick="resetDashboard()">← Changer les fichiers</button>
+      <button class="btn-secondary" onclick="exportCSV()">⬇ Exporter CSV</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <select id="fMois" onchange="render()"><option value="">Tous les mois</option></select>
+    <select id="fBD" onchange="render()"><option value="">Tous les BD</option></select>
+    <select id="fEntity" onchange="render()"><option value="">Toutes les entités</option></select>
+    <select id="fMatch" onchange="render()">
+      <option value="">Toutes les factures</option>
+      <option value="1">Avec contrat lié</option>
+      <option value="0">Sans contrat</option>
+    </select>
+  </div>
+
+  <div class="metrics">
+    <div class="mc"><div class="mc-l">Facturé (filtre)</div><div class="mc-v" id="mTotal">—</div><div class="mc-s" id="mNb">—</div></div>
+    <div class="mc"><div class="mc-l">Commissions</div><div class="mc-v" id="mCom">—</div><div class="mc-s">sur période filtrée</div></div>
+    <div class="mc"><div class="mc-l">BD actifs</div><div class="mc-v" id="mBD">—</div><div class="mc-s">avec contrat lié</div></div>
+    <div class="mc"><div class="mc-l">Contrats matchés</div><div class="mc-v" id="mMatch">—</div><div class="mc-s">sur total factures</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Commissions par BD / mois</div>
+    <div class="legend" id="legend"></div>
+    <div class="chart-wrap"><canvas id="chart1" role="img" aria-label="Commissions par BD par mois"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Synthèse par BD</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:160px">Business Developer</th>
+          <th class="r" style="width:70px">Fact.</th>
+          <th class="r" style="width:110px">Montant</th>
+          <th class="r" style="width:110px">Commission</th>
+          <th class="r" style="width:80px">Taux moy.</th>
+        </tr></thead>
+        <tbody id="synthBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+      <span class="card-title" style="margin-bottom:0">Détail des commissions</span>
+      <span class="info-pill">✏️ Taux modifiable — recalcul instantané</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:130px">Facture</th>
+          <th style="width:82px">Date</th>
+          <th style="width:105px">Contrat</th>
+          <th style="width:150px">Client</th>
+          <th style="width:140px">Entité facturation</th>
+          <th style="width:120px">BD</th>
+          <th class="r" style="width:90px">Montant</th>
+          <th class="r" style="width:68px">Taux %</th>
+          <th class="r" style="width:90px">Commission</th>
+        </tr></thead>
+        <tbody id="detailBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS=['#378ADD','#1D9E75','#D85A30','#7F77DD','#BA7517','#D4537E','#639922','#E24B4A','#888780','#5DCAA5'];
+const BGCOL=['#E6F1FB','#E1F5EE','#FAECE7','#EEEDFE','#FAEEDA','#FBEAF0','#EAF3DE','#FCEBEB','#F1EFE8','#9FE1CB'];
+
+let files={invoices:null,contracts:null};
+let allData=[];
+let rateOverrides={};
+let chartInst=null;
+
+// ---- FILE HANDLING ----
+function onDragOver(e,id){e.preventDefault();document.getElementById(id).classList.add('over')}
+function onDragLeave(id){document.getElementById(id).classList.remove('over')}
+function onDrop(e,type){e.preventDefault();const id=type==='invoices'?'dzInvoices':'dzContracts';document.getElementById(id).classList.remove('over');const f=e.dataTransfer.files[0];if(f)handleFile(f,type)}
+function onFileInput(e,type){const f=e.target.files[0];if(f)handleFile(f,type)}
+
+function handleFile(file,type){
+  files[type]=file;
+  const nameEl=document.getElementById(type==='invoices'?'invoiceFileName':'contractFileName');
+  const dzEl=document.getElementById(type==='invoices'?'dzInvoices':'dzContracts');
+  nameEl.textContent='✓ '+file.name;
+  dzEl.classList.add('done');
+  document.getElementById('loadBtn').disabled=!(files.invoices&&files.contracts);
+  document.getElementById('uploadError').style.display='none';
+}
+
+// ---- PARSE EXCEL ----
+function parseXLSX(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+        resolve(rows);
+      }catch(err){reject(err)}
+    };
+    reader.onerror=reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function extractContractRef(ref){
+  if(!ref)return'';
+  const m=String(ref).match(/FR-AFR-\d{5}/);
+  return m?m[0]:'';
+}
+
+function formatDate(d){
+  if(!d)return'';
+  if(d instanceof Date)return d.toISOString().slice(0,10);
+  return String(d).slice(0,10);
+}
+
+function shortEntity(e){
+  return String(e).replace('Altios ','').replace(' Limited','').replace(' Private','').replace(', Invoicing.*','').trim();
+}
+
+async function processFiles(){
+  document.getElementById('loadBtn').disabled=true;
+  document.getElementById('loadBtn').textContent='Chargement…';
+  document.getElementById('uploadError').style.display='none';
+  try{
+    const [invRows,ctRows]=await Promise.all([parseXLSX(files.invoices),parseXLSX(files.contracts)]);
+
+    // Build contract map — find columns flexibly
+    const contractMap={};
+    ctRows.forEach(r=>{
+      const ref=String(r['Contract Reference']||r['sale_contract_id']||'').trim();
+      if(!ref||contractMap[ref])return;
+      contractMap[ref]={
+        salesperson:String(r['Salesperson']||r['user_id']||'').trim(),
+        commission:parseFloat(r['BD Commission (in %)'||r['bd_comission']]||r['bd_comission']||0)||0,
+        customer:String(r['Customer']||r['partner_id']||'').trim(),
+        invoicing_entity:String(r['Invoicing Entity']||r['invoicing_entity']||'').trim(),
+      };
+    });
+
+    // Build invoice rows
+    allData=invRows.map(r=>{
+      const number=String(r['Number']||r['name']||'');
+      const dateRaw=r['Invoice/Bill Date']||r['invoice_date']||'';
+      const date=formatDate(dateRaw);
+      const month=date?date.slice(0,7):'';
+      const ref=String(r['Reference']||r['ref']||'');
+      const amount=parseFloat(r['Total in Currency Signed']||r['amount_untaxed']||0)||0;
+      const contractRef=extractContractRef(ref);
+      const contract=contractMap[contractRef]||{};
+      const bd=contract.salesperson||'';
+      const rate=contract.commission||0;
+      return{number,date,month,ref,contractRef,amount,customer:contract.customer||'',invoicing_entity:contract.invoicing_entity||'',bd,rate,commission:amount*(rate/100),has_contract:!!(contractRef&&bd)};
+    }).filter(r=>r.number);
+
+    if(!allData.length)throw new Error('Aucune ligne trouvée dans le fichier factures.');
+    rateOverrides={};
+    document.getElementById('uploadScreen').style.display='none';
+    document.getElementById('dashboard').style.display='block';
+    render();
+  }catch(err){
+    document.getElementById('uploadError').style.display='block';
+    document.getElementById('uploadError').textContent='Erreur : '+err.message;
+  }
+  document.getElementById('loadBtn').disabled=false;
+  document.getElementById('loadBtn').textContent='Générer le dashboard →';
+}
+
+// ---- FILTERS ----
+function getFiltered(){
+  const m=document.getElementById('fMois').value;
+  const b=document.getElementById('fBD').value;
+  const e=document.getElementById('fEntity').value;
+  const hc=document.getElementById('fMatch').value;
+  return allData.filter(r=>
+    (!m||r.month===m)&&
+    (!b||r.bd===b)&&
+    (!e||r.invoicing_entity===e)&&
+    (hc===''||(hc==='1'?r.has_contract:!r.has_contract))
+  );
+}
+
+function computeRate(r){return rateOverrides[r.number]!==undefined?rateOverrides[r.number]:r.rate}
+function computeCom(r){return r.amount*(computeRate(r)/100)}
+
+// ---- RENDER ----
+function fmtEur(n){return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n)}
+function fmtPct(n){return parseFloat(n).toFixed(1)+'%'}
+function initials(n){if(!n)return'?';return n.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)}
+
+function render(){
+  const rows=getFiltered();
+  const allBDs=[...new Set(allData.filter(r=>r.bd).map(r=>r.bd))].sort();
+
+  let totAmt=0,totCom=0,matchCt=0;
+  rows.forEach(r=>{totAmt+=r.amount;totCom+=computeCom(r);if(r.has_contract)matchCt++;});
+
+  document.getElementById('mTotal').textContent=fmtEur(totAmt);
+  document.getElementById('mNb').textContent=rows.length+' factures';
+  document.getElementById('mCom').textContent=fmtEur(totCom);
+  document.getElementById('mBD').textContent=new Set(rows.filter(r=>r.bd&&r.bd!=='Administrator'&&r.bd!=='Controlling Team').map(r=>r.bd)).size;
+  document.getElementById('mMatch').textContent=matchCt+' / '+rows.length;
+
+  const curM=document.getElementById('fMois').value;
+  const curB=document.getElementById('fBD').value;
+  const curE=document.getElementById('fEntity').value;
+  const allMonths=[...new Set(allData.map(r=>r.month).filter(Boolean))].sort().reverse();
+  const allBDsAll=[...new Set(allData.filter(r=>r.bd).map(r=>r.bd))].sort();
+  const allEntities=[...new Set(allData.filter(r=>r.invoicing_entity).map(r=>r.invoicing_entity))].sort();
+
+  document.getElementById('fMois').innerHTML='<option value="">Tous les mois</option>'+allMonths.map(m=>`<option value="${m}"${m===curM?' selected':''}>${m}</option>`).join('');
+  document.getElementById('fBD').innerHTML='<option value="">Tous les BD</option>'+allBDsAll.map(b=>`<option value="${b}"${b===curB?' selected':''}>${b}</option>`).join('');
+  document.getElementById('fEntity').innerHTML='<option value="">Toutes les entités</option>'+allEntities.map(e=>`<option value="${e}"${e===curE?' selected':''}>${shortEntity(e)}</option>`).join('');
+
+  const months=[...new Set(rows.map(r=>r.month).filter(Boolean))].sort();
+  renderSynth(rows,allBDs);
+  renderDetail(rows,allBDs);
+  renderChart(rows,months,allBDs);
+}
+
+function renderSynth(rows,allBDs){
+  const map={};
+  rows.forEach(r=>{
+    if(!r.bd)return;
+    const rate=computeRate(r);const com=computeCom(r);
+    if(!map[r.bd])map[r.bd]={count:0,amt:0,com:0,rates:[]};
+    map[r.bd].count++;map[r.bd].amt+=r.amount;map[r.bd].com+=com;
+    if(rate>0)map[r.bd].rates.push(rate);
+  });
+  const bds=Object.keys(map).sort((a,b)=>map[b].com-map[a].com);
+  let tA=0,tC=0,tN=0;
+  document.getElementById('synthBody').innerHTML=bds.map((bd)=>{
+    const d=map[bd];tA+=d.amt;tC+=d.com;tN+=d.count;
+    const idx=allBDs.indexOf(bd);
+    const bg=BGCOL[idx>=0?idx%BGCOL.length:9];const col=COLORS[idx>=0?idx%COLORS.length:9];
+    const avgR=d.rates.length?d.rates.reduce((a,b)=>a+b,0)/d.rates.length:0;
+    return`<tr><td><span class="av" style="background:${bg};color:${col}">${initials(bd)}</span>${bd}</td><td class="r">${d.count}</td><td class="r">${fmtEur(d.amt)}</td><td class="r" style="font-weight:600">${fmtEur(d.com)}</td><td class="r">${avgR?fmtPct(avgR):'—'}</td></tr>`;
+  }).join('')+`<tr class="trow-tot"><td>Total</td><td class="r">${tN}</td><td class="r">${fmtEur(tA)}</td><td class="r">${fmtEur(tC)}</td><td class="r">—</td></tr>`;
+}
+
+function renderDetail(rows,allBDs){
+  const tbody=document.getElementById('detailBody');
+  if(!rows.length){tbody.innerHTML=`<tr><td colspan="9" class="no-data">Aucune facture</td></tr>`;return;}
+  tbody.innerHTML=rows.map(r=>{
+    const rate=computeRate(r);const com=computeCom(r);
+    const idx=allBDs.indexOf(r.bd);
+    const bg=BGCOL[idx>=0?idx%BGCOL.length:9];const col=COLORS[idx>=0?idx%COLORS.length:9];
+    const amtCls=r.amount<0?'br':'bb';
+    return`<tr>
+      <td title="${r.number}"><span class="badge ${amtCls}">${r.number}</span></td>
+      <td style="color:#888">${r.date}</td>
+      <td>${r.contractRef?`<span class="badge ba">${r.contractRef}</span>`:'<span class="muted">—</span>'}</td>
+      <td title="${r.customer}">${r.customer||'<span class="muted">—</span>'}</td>
+      <td title="${r.invoicing_entity}">${r.invoicing_entity?shortEntity(r.invoicing_entity):'<span class="muted">—</span>'}</td>
+      <td>${r.bd?`<span class="av" style="background:${bg};color:${col}">${initials(r.bd)}</span>${r.bd}`:'<span class="muted">—</span>'}</td>
+      <td class="r" style="${r.amount<0?'color:#A32D2D':''}">${fmtEur(r.amount)}</td>
+      <td class="r"><input class="edit-rate" type="number" min="0" max="100" step="0.5" value="${rate}" data-num="${r.number}" onchange="updateRate(this)"></td>
+      <td class="r" style="font-weight:600">${com?fmtEur(com):'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function updateRate(el){
+  rateOverrides[el.dataset.num]=parseFloat(el.value)||0;
+  render();
+}
+
+function renderChart(rows,months,allBDs){
+  const bds=[...new Set(rows.filter(r=>r.bd).map(r=>r.bd))].sort();
+  document.getElementById('legend').innerHTML=bds.map(bd=>{
+    const idx=allBDs.indexOf(bd);
+    return`<span><span class="ldot" style="background:${COLORS[idx>=0?idx%COLORS.length:9]}"></span>${bd}</span>`;
+  }).join('');
+  const datasets=bds.map(bd=>{
+    const idx=allBDs.indexOf(bd);
+    return{label:bd,data:months.map(m=>Math.round(rows.filter(r=>r.bd===bd&&r.month===m).reduce((a,r)=>a+computeCom(r),0)*100)/100),backgroundColor:COLORS[idx>=0?idx%COLORS.length:9],borderRadius:4};
+  });
+  if(chartInst)chartInst.destroy();
+  chartInst=new Chart(document.getElementById('chart1'),{
+    type:'bar',data:{labels:months,datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtEur(ctx.raw)}`}}},
+      scales:{
+        x:{stacked:true,ticks:{autoSkip:false,maxRotation:0,font:{size:11}},grid:{display:false}},
+        y:{stacked:true,ticks:{callback:v=>'€'+(v>=1000?Math.round(v/1000)+'k':v),font:{size:11}},grid:{color:'rgba(0,0,0,.06)'}}
+      }
+    }
+  });
+}
+
+// ---- EXPORT CSV ----
+function exportCSV(){
+  const rows=getFiltered();
+  const headers=['Facture','Date','Contrat','Client','Entité facturation','BD','Montant','Taux %','Commission'];
+  const lines=[headers.join(';'),...rows.map(r=>{
+    const rate=computeRate(r);const com=computeCom(r);
+    return[r.number,r.date,r.contractRef,r.customer,r.invoicing_entity,r.bd,r.amount.toFixed(2),rate.toFixed(1),com.toFixed(2)].join(';');
+  })];
+  const blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='commissions_bd.csv';a.click();
+}
+
+// ---- RESET ----
+function resetDashboard(){
+  files={invoices:null,contracts:null};allData=[];rateOverrides={};
+  document.getElementById('invoiceFileName').textContent='';
+  document.getElementById('contractFileName').textContent='';
+  document.getElementById('dzInvoices').classList.remove('done');
+  document.getElementById('dzContracts').classList.remove('done');
+  document.getElementById('loadBtn').disabled=true;
+  document.getElementById('dashboard').style.display='none';
+  document.getElementById('uploadScreen').style.display='flex';
+}
+</script>
+</body>
+</html>
