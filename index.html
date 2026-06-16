@@ -257,7 +257,7 @@ let chartInst=null;
 // ---- FILE HANDLING ----
 function onDragOver(e,id){e.preventDefault();document.getElementById(id).classList.add('over')}
 function onDragLeave(id){document.getElementById(id).classList.remove('over')}
-function onDrop(e,type){e.preventDefault();const id=type==='invoices'?'dzInvoices':'dzContracts';document.getElementById(id).classList.remove('over');const f=e.dataTransfer.files[0];if(f)handleFile(f,type)}
+function onDrop(e,type){e.preventDefault();const dzMap={invoices:'dzInvoices',contracts:'dzContracts',so:'dzSO'};const id=dzMap[type]||'dzInvoices';document.getElementById(id).classList.remove('over');const f=e.dataTransfer.files[0];if(f)handleFile(f,type)}
 function onFileInput(e,type){const f=e.target.files[0];if(f)handleFile(f,type)}
 
 function handleFile(file,type){
@@ -582,8 +582,7 @@ function exportRates(){
     const rate=computeRate(r);
     if(!seen[r.contractRef]&&rate>0){seen[r.contractRef]=true;lines.push(r.contractRef+';'+rate);}
   });
-  const blob=new Blob(['﻿'+lines.join('
-')],{type:'text/csv;charset=utf-8'});
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='taux_commissions.csv';a.click();
 }
 
@@ -591,8 +590,7 @@ function loadRates(e){
   const file=e.target.files[0];if(!file)return;
   const reader=new FileReader();
   reader.onload=ev=>{
-    const lines=ev.target.result.split('
-').slice(1);
+    const lines=ev.target.result.split('\n').slice(1);
     lines.forEach(l=>{
       const [ref,rate]=l.trim().split(';');
       if(!ref||!rate)return;
@@ -612,7 +610,7 @@ function exportCSV(){
     const rate=computeRate(r);const com=computeCom(r);
     return[r.number,r.date,r.contractRef,r.customer,r.invoicing_entity,r.bd,r.amount.toFixed(2),rate.toFixed(1),com.toFixed(2)].join(';');
   })];
-  const blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='commissions_bd.csv';a.click();
 }
 
