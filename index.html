@@ -65,7 +65,7 @@ select{font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #d0d0c
 
 /* TABLE */
 .table-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;min-width:1100px}
+table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;min-width:1180px}
 th{text-align:left;padding:8px 10px;color:#888;font-weight:500;border-bottom:1px solid #e5e5e3;font-size:11px;white-space:nowrap}
 td{padding:9px 10px;border-bottom:1px solid #f0f0ee;color:#1a1a1a;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 tr:last-child td{border-bottom:none}
@@ -235,7 +235,7 @@ tr:hover td{background:#fafaf8}
           <th class="r" style="width:90px">Fact.</th>
           <th class="r" style="width:120px">Brut</th>
           <th class="r" style="width:65px">Taux %</th>
-          <th class="r" style="width:100px">Commission</th>
+          <th class="r" style="width:110px">Commission</th>
           <th style="width:65px">Statut</th>
         </tr></thead>
         <tbody id="detailBody"></tbody>
@@ -543,22 +543,31 @@ function updateRate(el){
 
 function renderChart(rows,months,allBDs){
   const bds=[...new Set(rows.filter(r=>r.bd).map(r=>r.bd))].sort();
-  document.getElementById('legend').innerHTML=bds.map(bd=>{
-    const idx=allBDs.indexOf(bd);
-    return`<span><span class="ldot" style="background:${COLORS[idx>=0?idx%COLORS.length:9]}"></span>${bd}</span>`;
-  }).join('');
-  const datasets=bds.map(bd=>{
-    const idx=allBDs.indexOf(bd);
-    return{label:bd,data:months.map(m=>Math.round(rows.filter(r=>r.bd===bd&&r.month===m).reduce((a,r)=>a+computeCom(r),0)*100)/100),backgroundColor:COLORS[idx>=0?idx%COLORS.length:9],borderRadius:4};
-  });
+  document.getElementById('legend').style.display='none';
+  const bdTotals=bds.map(bd=>({
+    bd,
+    total:Math.round(rows.filter(r=>r.bd===bd).reduce((a,r)=>a+computeCom(r),0)*100)/100,
+    idx:allBDs.indexOf(bd)
+  })).filter(d=>d.total!==0).sort((a,b)=>b.total-a.total);
   if(chartInst)chartInst.destroy();
   chartInst=new Chart(document.getElementById('chart1'),{
-    type:'bar',data:{labels:months,datasets},
+    type:'bar',
+    data:{
+      labels:bdTotals.map(d=>d.bd),
+      datasets:[{
+        data:bdTotals.map(d=>d.total),
+        backgroundColor:bdTotals.map(d=>COLORS[d.idx>=0?d.idx%COLORS.length:9]),
+        borderRadius:4,
+      }]
+    },
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtEur(ctx.raw)}`}}},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>fmtEur(ctx.raw)}}
+      },
       scales:{
-        x:{stacked:true,ticks:{autoSkip:false,maxRotation:0,font:{size:11}},grid:{display:false}},
-        y:{stacked:true,ticks:{callback:v=>'€'+(v>=1000?Math.round(v/1000)+'k':v),font:{size:11}},grid:{color:'rgba(0,0,0,.06)'}}
+        x:{ticks:{autoSkip:false,maxRotation:30,font:{size:11}},grid:{display:false}},
+        y:{ticks:{callback:v=>'€'+(v>=1000?(v/1000).toFixed(0)+'k':v),font:{size:11}},grid:{color:'rgba(0,0,0,.06)'}}
       }
     }
   });
