@@ -65,7 +65,7 @@ select{font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #d0d0c
 
 /* TABLE */
 .table-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;min-width:1100px}
 th{text-align:left;padding:8px 10px;color:#888;font-weight:500;border-bottom:1px solid #e5e5e3;font-size:11px;white-space:nowrap}
 td{padding:9px 10px;border-bottom:1px solid #f0f0ee;color:#1a1a1a;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 tr:last-child td{border-bottom:none}
@@ -206,17 +206,17 @@ tr:hover td{background:#fafaf8}
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th style="width:130px">Facture</th>
-          <th style="width:82px">Date</th>
-          <th style="width:105px">Contrat</th>
+          <th style="width:140px">Facture</th>
+          <th style="width:85px">Date</th>
+          <th style="width:110px">Contrat</th>
           <th style="width:150px">Client</th>
-          <th style="width:140px">Entité facturation</th>
+          <th style="width:130px">Entité facturation</th>
           <th style="width:120px">BD</th>
-          <th class="r" style="width:85px">Fact.</th>
-          <th class="r" style="width:85px">Brut</th>
-          <th class="r" style="width:55px">Taux %</th>
-          <th class="r" style="width:90px">Commission</th>
-          <th style="width:60px">Statut</th>
+          <th class="r" style="width:90px">Fact.</th>
+          <th class="r" style="width:120px">Brut</th>
+          <th class="r" style="width:65px">Taux %</th>
+          <th class="r" style="width:100px">Commission</th>
+          <th style="width:65px">Statut</th>
         </tr></thead>
         <tbody id="detailBody"></tbody>
       </table>
