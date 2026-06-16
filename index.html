@@ -65,7 +65,7 @@ select{font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid #d0d0c
 
 /* TABLE */
 .table-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;min-width:1180px}
+table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;min-width:1020px}
 th{text-align:left;padding:8px 10px;color:#888;font-weight:500;border-bottom:1px solid #e5e5e3;font-size:11px;white-space:nowrap}
 td{padding:9px 10px;border-bottom:1px solid #f0f0ee;color:#1a1a1a;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 tr:last-child td{border-bottom:none}
@@ -175,6 +175,8 @@ tr:hover td{background:#fafaf8}
     <div class="dash-actions">
       <button class="btn-secondary" onclick="resetDashboard()">← Changer les fichiers</button>
       <button class="btn-secondary" onclick="exportCSV()">⬇ Exporter CSV</button>
+      <button class="btn-secondary" onclick="exportRates()">💾 Exporter les taux</button>
+      <label class="btn-secondary" style="cursor:pointer">📂 Charger les taux<input type="file" accept=".csv" style="display:none" onchange="loadRates(event)"></label>
     </div>
   </div>
 
@@ -232,8 +234,7 @@ tr:hover td{background:#fafaf8}
           <th style="width:150px">Client</th>
           <th style="width:130px">Entité facturation</th>
           <th style="width:120px">BD</th>
-          <th class="r" style="width:90px">Fact.</th>
-          <th class="r" style="width:120px">Brut</th>
+          <th class="r" style="width:130px">Brut</th>
           <th class="r" style="width:65px">Taux %</th>
           <th class="r" style="width:110px">Commission</th>
           <th style="width:65px">Statut</th>
@@ -522,13 +523,12 @@ function renderDetail(rows,allBDs){
     const amtCls=r.amount<0?'br':'bb';
     return sep+`<tr>
       <td title="${r.number}"><span class="badge ${amtCls}">${r.number}</span></td>
-      <td style="color:#888">${r.date}</td>
+      <td style="color:#888">${r.date?r.date.slice(5,7)+'/'+r.date.slice(2,4):'—'}</td>
       <td>${r.contractRef?`<span class="badge ba">${r.contractRef}</span>`:'<span class="muted">—</span>'}</td>
       <td title="${r.customer}">${r.customer||'<span class="muted">—</span>'}</td>
       <td title="${r.invoicing_entity}">${r.invoicing_entity?shortEntity(r.invoicing_entity):'<span class="muted">—</span>'}</td>
       <td>${r.bd?`<span class="av" style="background:${bg};color:${col}">${initials(r.bd)}</span>${r.bd}`:'<span class="muted">—</span>'}</td>
-      <td class="r" style="${r.amount<0?'color:#A32D2D':''}">${fmtEur(r.amount)}</td>
-      <td class="r">${r.grossAmount&&r.grossAmount!==r.amount?'<span style="font-weight:600">'+fmtEur(r.grossAmount)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+((r.outbRate||0).toFixed(0))+'%)</span>':'<span class="muted">—</span>'}</td>
+      <td class="r">${r.grossAmount&&r.grossAmount!==r.amount?'<span style="font-weight:600">'+fmtEur(r.grossAmount)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+((r.outbRate||0).toFixed(0))+'%)</span>':fmtEur(r.amount)}</td>
       <td class="r"><input class="edit-rate" type="number" min="0" max="100" step="0.5" value="${rate}" data-num="${r.number}" onchange="updateRate(this)"></td>
       <td class="r" style="font-weight:600">${com?fmtEur(com):'—'}</td>
       <td>${r.warning==='100'?'<span class="badge br" title="Seules des lignes à 100% trouvées — pas de taux valide">❌ 100%</span>':r.warning==='mixed'?'<span class="badge ba" title="Contrat mixte : lignes 100% ET lignes valides — taux valide utilisé">⚠️ Mixte</span>':'<span class="badge bg">✓</span>'}</td>
@@ -571,6 +571,37 @@ function renderChart(rows,months,allBDs){
       }
     }
   });
+}
+
+// ---- RATES PERSISTENCE ----
+function exportRates(){
+  const lines=['contract_ref;rate'];
+  const seen={};
+  allData.forEach(r=>{
+    if(!r.contractRef)return;
+    const rate=computeRate(r);
+    if(!seen[r.contractRef]&&rate>0){seen[r.contractRef]=true;lines.push(r.contractRef+';'+rate);}
+  });
+  const blob=new Blob(['﻿'+lines.join('
+')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='taux_commissions.csv';a.click();
+}
+
+function loadRates(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const lines=ev.target.result.split('
+').slice(1);
+    lines.forEach(l=>{
+      const [ref,rate]=l.trim().split(';');
+      if(!ref||!rate)return;
+      // Apply rate to all invoices with this contract
+      allData.forEach(r=>{if(r.contractRef===ref)rateOverrides[r.number]=parseFloat(rate)||0;});
+    });
+    render();
+  };
+  reader.readAsText(file);
 }
 
 // ---- EXPORT CSV ----
