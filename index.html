@@ -97,7 +97,7 @@ tr:hover td{background:#fafaf8}
 
 <div class="header">
   <span class="header-logo">Altios <span>·</span> Commissions BD</span>
-  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.6</span></span>
+  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.7</span></span>
 </div>
 
 <!-- UPLOAD SCREEN -->
@@ -107,7 +107,7 @@ tr:hover td{background:#fafaf8}
     <div class="upload-sub" style="margin-top:.5rem">Exportez les deux fichiers depuis Odoo et déposez-les ci-dessous. Tout le calcul se fait dans votre navigateur.</div>
   </div>
 
-  <div class="upload-grid">
+  <div class="upload-grid" style="grid-template-columns:1fr 1fr;max-width:900px">
     <div class="drop-zone" id="dzInvoices" ondragover="onDragOver(event,'dzInvoices')" ondragleave="onDragLeave('dzInvoices')" ondrop="onDrop(event,'invoices')">
       <input type="file" accept=".xlsx,.xls,.csv" onchange="onFileInput(event,'invoices')">
       <span class="dz-icon">🧾</span>
@@ -123,7 +123,14 @@ tr:hover td{background:#fafaf8}
       <div class="dz-file" id="contractFileName"></div>
     </div>
   </div>
-  <div class="upload-grid" style="max-width:600px;width:100%">
+  <div class="upload-grid" style="grid-template-columns:1fr 1fr;max-width:900px;width:100%">
+    <div class="drop-zone" id="dzCreditNotes" ondragover="onDragOver(event,'dzCreditNotes')" ondragleave="onDragLeave('dzCreditNotes')" ondrop="onDrop(event,'creditnotes')">
+      <input type="file" accept=".xlsx,.xls,.csv" onchange="onFileInput(event,'creditnotes')">
+      <span class="dz-icon">🔴</span>
+      <div class="dz-label">Export Avoirs</div>
+      <div class="dz-sub">Template : <strong>BD Comission V3</strong></div>
+      <div class="dz-file" id="creditNotesFileName"></div>
+    </div>
     <div class="drop-zone" id="dzSO" ondragover="onDragOver(event,'dzSO')" ondragleave="onDragLeave('dzSO')" ondrop="onDrop(event,'so')">
       <input type="file" accept=".xlsx,.xls,.csv" onchange="onFileInput(event,'so')">
       <span class="dz-icon">🛒</span>
@@ -260,7 +267,7 @@ tr:hover td{background:#fafaf8}
 const COLORS=['#378ADD','#1D9E75','#D85A30','#7F77DD','#BA7517','#D4537E','#639922','#E24B4A','#888780','#5DCAA5'];
 const BGCOL=['#E6F1FB','#E1F5EE','#FAECE7','#EEEDFE','#FAEEDA','#FBEAF0','#EAF3DE','#FCEBEB','#F1EFE8','#9FE1CB'];
 
-let files={invoices:null,contracts:null,so:null};
+let files={invoices:null,contracts:null,so:null,creditnotes:null};
 let allData=[];
 let rateOverrides={};
 let bdOverrides={};
@@ -274,8 +281,8 @@ function onFileInput(e,type){const f=e.target.files[0];if(f)handleFile(f,type)}
 
 function handleFile(file,type){
   files[type]=file;
-  const nameMap={invoices:'invoiceFileName',contracts:'contractFileName',so:'soFileName'};
-  const dzMap={invoices:'dzInvoices',contracts:'dzContracts',so:'dzSO'};
+  const nameMap={invoices:'invoiceFileName',contracts:'contractFileName',so:'soFileName',creditnotes:'creditNotesFileName'};
+  const dzMap={invoices:'dzInvoices',contracts:'dzContracts',so:'dzSO',creditnotes:'dzCreditNotes'};
   document.getElementById(nameMap[type]).textContent='✓ '+file.name;
   document.getElementById(dzMap[type]).classList.add('done');
   document.getElementById('loadBtn').disabled=!(files.invoices&&files.contracts);
@@ -329,7 +336,10 @@ async function processFiles(){
   try{
     const promises=[parseXLSX(files.invoices),parseXLSX(files.contracts)];
     if(files.so)promises.push(parseXLSX(files.so));
-    const [invRows,ctRows,soRows=[]]=await Promise.all(promises);
+    if(files.creditnotes)promises.push(parseXLSX(files.creditnotes));
+    const [invRows,ctRows,soRows=[],cnRows=[]]=await Promise.all(promises);
+    // Merge credit notes into invoice rows
+    const allInvRows=[...invRows,...cnRows];
 
     // Build contract map with y1/y2 outb rate logic
     const contractMap={};
@@ -379,7 +389,7 @@ async function processFiles(){
     // Build invoice rows — aggregate multi-line rows by invoice number (706100/706200)
     const invoiceAgg={};
     let currentInvNum=null;
-    invRows.forEach(r=>{
+    allInvRows.forEach(r=>{
       const number=String(r['Number']||'').trim();
       const account=String(r['Invoice lines/Account']||'').trim();
       const credit=parseFloat(r['Invoice lines/Credit']||0)||0;
@@ -721,13 +731,15 @@ function exportCSV(){
 
 // ---- RESET ----
 function resetDashboard(){
-  files={invoices:null,contracts:null,so:null};allData=[];rateOverrides={};bdOverrides={};
+  files={invoices:null,contracts:null,so:null,creditnotes:null};allData=[];rateOverrides={};bdOverrides={};
   document.getElementById('invoiceFileName').textContent='';
   document.getElementById('contractFileName').textContent='';
   document.getElementById('soFileName').textContent='';
+  document.getElementById('creditNotesFileName').textContent='';
   document.getElementById('dzInvoices').classList.remove('done');
   document.getElementById('dzContracts').classList.remove('done');
   document.getElementById('dzSO').classList.remove('done');
+  document.getElementById('dzCreditNotes').classList.remove('done');
   document.getElementById('loadBtn').disabled=true;
   document.getElementById('dashboard').style.display='none';
   document.getElementById('uploadScreen').style.display='flex';
