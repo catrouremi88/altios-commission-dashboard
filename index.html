@@ -139,6 +139,8 @@ tr:hover td{background:#fafaf8}
           <li>· Reference</li>
           <li>· Total in Currency Signed</li>
           <li>· Origin <span style="color:#aaa">(pour les INV)</span></li>
+          <li>· Invoice lines/Account</li>
+          <li>· Invoice lines/Credit</li>
         </ul>
       </div>
       <div>
@@ -450,7 +452,7 @@ function getFiltered(){
 
 function computeRate(r){return rateOverrides[r.number]!==undefined?rateOverrides[r.number]:r.rate}
 function computeCom(r){
-  const base=r.number.startsWith('INV')?r.amount:(r.grossAmount||r.amount);
+  const base=r.commissionBase||r.grossAmount||r.amount;
   return base*(computeRate(r)/100);
 }
 
@@ -517,7 +519,14 @@ function getGroup(r){
   return 99;                   // no contract
 }
 function sortRows(rows){
-  return [...rows].sort((a,b)=>getGroup(a)-getGroup(b));
+  return [...rows].sort((a,b)=>{
+    const ga=getGroup(a),gb=getGroup(b);
+    if(ga!==gb)return ga-gb;
+    // Within same group, sort by contract ref then invoice number
+    const ca=a.contractRef||'ZZZ',cb=b.contractRef||'ZZZ';
+    if(ca!==cb)return ca.localeCompare(cb);
+    return (a.number||'').localeCompare(b.number||'');
+  });
 }
 function renderDetail(rows,allBDs){
   rows=sortRows(rows);
