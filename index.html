@@ -97,7 +97,7 @@ tr:hover td{background:#fafaf8}
 
 <div class="header">
   <span class="header-logo">Altios <span>·</span> Commissions BD</span>
-  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.4</span></span>
+  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.5</span></span>
 </div>
 
 <!-- UPLOAD SCREEN -->
@@ -614,8 +614,11 @@ function renderDetail(rows,allBDs){
       })()}</td>
       <td class="r">${(()=>{
         const hasLines=r.c706100>0||r.c706200>0;
+        const hasOtherLines=r.commissionBase&&r.commissionBase!==r.amount&&!hasLines;
         const showGross=r.grossAmount&&r.grossAmount!==r.amount;
-        const brutDisplay=showGross?'<span style="font-weight:600">'+fmtEur(r.commissionBase||r.grossAmount)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+((r.outbRate||0).toFixed(0))+'%)</span>':fmtEur(r.amount);
+        // For INV with only 706other lines, show commissionBase directly
+        if(hasOtherLines)return '<span style="font-weight:600">'+fmtEur(r.commissionBase)+'</span>';
+        const brutDisplay=showGross?'<span style="font-weight:600">'+fmtEur(r.commissionBase||r.grossAmount)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+((r.outbRate||0).toFixed(0))+'%)</span>':fmtEur(r.commissionBase&&r.commissionBase!==r.grossAmount?r.commissionBase:r.amount);
         if(!hasLines||!showGross)return brutDisplay;
         const factor=r.outbRate?1/(r.outbRate/100):1;
         const g100=(r.c706100*factor).toFixed(2);
