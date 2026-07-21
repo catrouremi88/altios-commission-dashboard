@@ -297,7 +297,7 @@ function parseXLSX(file){
 
 function extractContractRef(ref){
   if(!ref)return'';
-  const m=String(ref).match(/FR-AFR-\d{5}/);
+  const m=String(ref).match(/[A-Z]{2}-[A-Z]{2,5}-\d{3,6}/);
   return m?m[0]:'';
 }
 
@@ -592,9 +592,9 @@ function renderDetail(rows,allBDs){
         const g200raw=(r.c706200*factor).toFixed(2);
         const g200cap=Math.min(r.c706200*factor,400).toFixed(2);
         const capped=r.c706200*factor>400;
-        const tip='706100 : '+fmtEur(r.c706100)+' ÷ '+r.outbRate+'% = '+fmtEur(g100)
-          +'&#10;706200 : '+fmtEur(r.c706200)+' ÷ '+r.outbRate+'% = '+fmtEur(g200raw)+(capped?' → plafonné '+fmtEur(400):'')
-          +'&#10;Base commission = '+fmtEur(r.commissionBase);
+        const tip='<b>706100</b> : '+fmtEur(r.c706100)+' ÷ '+r.outbRate+'% = '+fmtEur(g100)
+          +'<br><b>706200</b> : '+fmtEur(r.c706200)+' ÷ '+r.outbRate+'% = '+fmtEur(g200raw)+(capped?' → plafonné '+fmtEur(400):'')
+          +'<br><b>Base commission</b> = '+fmtEur(r.commissionBase);
         return '<span class="tooltip-wrap"><span style="font-weight:600">'+fmtEur(r.commissionBase)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+r.outbRate+'%)</span><span class="tooltip-icon" onclick="toggleTip(this)" title="Détail calcul">ℹ️</span><span class="tooltip-box">'+tip+'</span></span>';
       })()}</td>
       <td class="r"><input class="edit-rate" type="number" min="0" max="100" step="0.5" value="${rate}" data-num="${r.number}" onchange="updateRate(this)"></td>
