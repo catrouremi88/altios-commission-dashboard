@@ -97,7 +97,7 @@ tr:hover td{background:#fafaf8}
 
 <div class="header">
   <span class="header-logo">Altios <span>·</span> Commissions BD</span>
-  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v2.3</span></span>
+  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v2.4</span></span>
 </div>
 
 <!-- UPLOAD SCREEN -->
@@ -450,7 +450,7 @@ async function processFiles(){
 
       return{number,date,month,ref,contractRef,originInvoice,amount,grossAmount,commissionBase,outbRate,warning,c706100,c706200,
         customer:contract.customer||'',invoicing_entity:contract.invoicing_entity||'',
-        bd:contract.salesperson||'',rate:contract.commission||0,bdOrig:contract.salesperson||'',
+        bd:contract.salesperson||'',bdOrig:contract.salesperson||'',rate:contract.commission||0,
         has_contract:!!(contractRef&&contract.salesperson)};
     }).filter(r=>r.number);
 
@@ -476,7 +476,7 @@ async function processFiles(){
                 ?(r.c706100*(1/(outbRate/100))+Math.min((r.c706200||0)*(1/(outbRate/100)),400))
                 :grossAmount
             );
-            return{...r,contractRef:originRef,grossAmount,commissionBase:commissionBasex,outbRate,warning,customer:contract.customer||'',invoicing_entity:contract.invoicing_entity||'',bd:contract.salesperson||'',rate:contract.commission||0,has_contract:true,c706100:r.c706100||0,c706200:r.c706200||0,c706other:r.c706other||0};
+            return{...r,contractRef:originRef,grossAmount,commissionBase:commissionBasex,outbRate,warning,customer:contract.customer||'',invoicing_entity:contract.invoicing_entity||'',bd:contract.salesperson||'',bdOrig:contract.salesperson||'',rate:contract.commission||0,has_contract:true,c706100:r.c706100||0,c706200:r.c706200||0,c706other:r.c706other||0};
           }
         }
       }
