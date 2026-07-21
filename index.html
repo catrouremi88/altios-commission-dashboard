@@ -97,7 +97,7 @@ tr:hover td{background:#fafaf8}
 
 <div class="header">
   <span class="header-logo">Altios <span>·</span> Commissions BD</span>
-  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.5</span></span>
+  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.6</span></span>
 </div>
 
 <!-- UPLOAD SCREEN -->
@@ -420,6 +420,7 @@ async function processFiles(){
       let outbRate=null;
       let warning=contract.warning||false;
       const isRET=number.startsWith('RET')||number.startsWith('RRET');
+      const isINV=number.startsWith('INV')||number.startsWith('RINV');
       if(isRET&&contract.y1_outb_rate&&contract.first_invoice_date&&amount){
         const firstDate=new Date(contract.first_invoice_date);
         const invDate=new Date(date);
@@ -430,10 +431,10 @@ async function processFiles(){
 
       // For INV: use 706xxx lines as HT base (avoids TTC in Total in Currency Signed)
       const invHT=c706100+c706200+(inv.c706other||0);
-      const invBase=number.startsWith('INV')&&invHT>0?invHT:amount;
+      const invBase=isINV&&invHT>0?invHT:amount;
 
       // Commission base: 706100 + min(706200, 400€) reconstituted — RET only
-      let commissionBase=number.startsWith('INV')?invBase:grossAmount;
+      let commissionBase=isINV?invBase:grossAmount;
       if(isRET&&(c706100>0||c706200>0)&&outbRate&&outbRate>0&&outbRate<100){
         const factor=1/(outbRate/100);
         commissionBase=c706100*factor+Math.min(c706200*factor,400);
@@ -454,6 +455,7 @@ async function processFiles(){
           if(contract.salesperson){
             let grossAmount=r.amount;let outbRate=null;let warning=contract.warning||false;
             const isRET2=r.number.startsWith('RET')||r.number.startsWith('RRET');
+            const isINV2=r.number.startsWith('INV')||r.number.startsWith('RINV');
             if(isRET2&&contract.y1_outb_rate&&contract.first_invoice_date&&r.amount){
               const firstDate=new Date(contract.first_invoice_date);const invDate=new Date(r.date);
               const diffYears=(invDate-firstDate)/(1000*60*60*24*365);
@@ -570,7 +572,7 @@ function renderSynth(rows,allBDs){
 }
 
 function getGroup(r){
-  if(r.number.startsWith('INV')&&r.has_contract)return 0; // INV France always top
+  if((r.number.startsWith('INV')||r.number.startsWith('RINV'))&&r.has_contract)return 0;
   if(r.outbRate>=30)return 1; // Y1 30%
   if(r.outbRate>0)return 2;   // Y2 20%
   if(r.has_contract)return 3; // contract but no rate
@@ -593,7 +595,7 @@ function renderDetail(rows,allBDs){
   let lastGroup=null;
   tbody.innerHTML=rows.map(r=>{
     const rate=computeRate(r);const com=computeCom(r);
-    const group=r.number.startsWith('INV')&&r.has_contract?'INV — France (100%)':r.outbRate>=30?'RET — Y1 (30%)':r.outbRate>0?'RET — Y2 (20%)':r.has_contract?'Sans taux':'Sans contrat';
+    const group=(r.number.startsWith('INV')||r.number.startsWith('RINV'))&&r.has_contract?'INV — France (100%)':r.outbRate>=30?'RET — Y1 (30%)':r.outbRate>0?'RET — Y2 (20%)':r.has_contract?'Sans taux':'Sans contrat';
     const sep=group!==lastGroup?(lastGroup!==null?`<tr><td colspan="11" style="padding:4px 10px;font-size:11px;font-weight:600;color:#888;background:#f5f5f3;border-bottom:1px solid #e5e5e3;letter-spacing:.04em;text-transform:uppercase">${group}</td></tr>`:`<tr><td colspan="11" style="padding:4px 10px;font-size:11px;font-weight:600;color:#888;background:#f5f5f3;border-bottom:1px solid #e5e5e3;letter-spacing:.04em;text-transform:uppercase">${group}</td></tr>`):'';
     lastGroup=group;
     const idx=allBDs.indexOf(r.bd);
@@ -617,7 +619,7 @@ function renderDetail(rows,allBDs){
         const hasOtherLines=r.commissionBase&&r.commissionBase!==r.amount&&!hasLines;
         const showGross=r.grossAmount&&r.grossAmount!==r.amount;
         // For INV with only 706other lines, show commissionBase directly
-        if(hasOtherLines)return '<span style="font-weight:600">'+fmtEur(r.commissionBase)+'</span>';
+        if(hasOtherLines)return '<span style="font-weight:600"'+(r.commissionBase<0?' style="color:#A32D2D"':'')+'>'+fmtEur(r.commissionBase)+'</span>';
         const brutDisplay=showGross?'<span style="font-weight:600">'+fmtEur(r.commissionBase||r.grossAmount)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+((r.outbRate||0).toFixed(0))+'%)</span>':fmtEur(r.commissionBase&&r.commissionBase!==r.grossAmount?r.commissionBase:r.amount);
         if(!hasLines||!showGross)return brutDisplay;
         const factor=r.outbRate?1/(r.outbRate/100):1;
@@ -630,7 +632,7 @@ function renderDetail(rows,allBDs){
       })()}</td>
       <td class="r"><input class="edit-rate" type="number" min="0" max="100" step="0.5" value="${rate}" data-num="${r.number}" onchange="updateRate(this)"></td>
       <td class="r" style="font-weight:600">${com?fmtEur(com):'—'}</td>
-      <td>${(r.warning==='100'||r.warning==='mixed')&&!r.number.startsWith('INV')?'<span class="badge '+(r.warning==='100'?'br" title="Seules des lignes à 100% — pas de taux valide">❌ 100%':'ba" title="Contrat mixte 100% + taux valide">⚠️ Mixte')+'</span>':'<span class="badge bg">✓</span>'}</td>
+      <td>${(r.warning==='100'||r.warning==='mixed')&&!r.number.startsWith('INV')&&!r.number.startsWith('RINV')?'<span class="badge '+(r.warning==='100'?'br" title="Seules des lignes à 100% — pas de taux valide">❌ 100%':'ba" title="Contrat mixte 100% + taux valide">⚠️ Mixte')+'</span>':'<span class="badge bg">✓</span>'}</td>
     </tr>`;
   }).join('');
 }
