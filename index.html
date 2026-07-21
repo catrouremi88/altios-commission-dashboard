@@ -149,8 +149,8 @@ tr:hover td{background:#fafaf8}
           <li>· Invoicing Entity</li>
           <li>· Salesperson</li>
           <li>· BD Commission (in %)</li>
-          <li>· Order Lines/Retrocession Rule/Y1 Outb Rate</li>
-          <li>· Order Lines/Retrocession Rule/Y2 Outb Rate</li>
+          <li>· Order Lines/Y1 Outb Rate</li>
+          <li>· Order Lines/Y2 Outb Rate</li>
           <li>· Order Lines/First Invoice Date</li>
         </ul>
       </div>
@@ -327,8 +327,9 @@ async function processFiles(){
       const ref=String(r['Contract Reference']||r['sale_contract_id']||'').trim();
       if(ref)currentRef=ref;
       if(!currentRef)return;
-      const y1=parseFloat(r['Order Lines/Retrocession Rule/Y1 Outb Rate']||r['y1_outb_rate']||0)||0;
-      const y2=parseFloat(r['Order Lines/Retrocession Rule/Y2 Outb Rate']||r['y2_outb_rate']||0)||0;
+      // Order Lines/Y1 Outb Rate (custom rule) takes priority over Retrocession Rule
+      const y1=parseFloat(r['Order Lines/Y1 Outb Rate']||r['Order Lines/Retrocession Rule/Y1 Outb Rate']||r['y1_outb_rate']||0)||0;
+      const y2=parseFloat(r['Order Lines/Y2 Outb Rate']||r['Order Lines/Retrocession Rule/Y2 Outb Rate']||r['y2_outb_rate']||0)||0;
       const firstInvDate=r['Order Lines/First Invoice Date']||r['historical_in_start_date']||null;
       if(ref&&!contractMap[currentRef]){
         contractMap[currentRef]={
@@ -509,10 +510,11 @@ function renderSynth(rows,allBDs){
 }
 
 function getGroup(r){
-  if(r.number.startsWith('INV'))return 0; // INV France always top
+  if(r.number.startsWith('INV')&&r.has_contract)return 0; // INV France always top
   if(r.outbRate>=30)return 1; // Y1 30%
   if(r.outbRate>0)return 2;   // Y2 20%
-  return 99;                   // no rate
+  if(r.has_contract)return 3; // contract but no rate
+  return 99;                   // no contract
 }
 function sortRows(rows){
   return [...rows].sort((a,b)=>getGroup(a)-getGroup(b));
@@ -524,7 +526,7 @@ function renderDetail(rows,allBDs){
   let lastGroup=null;
   tbody.innerHTML=rows.map(r=>{
     const rate=computeRate(r);const com=computeCom(r);
-    const group=r.number.startsWith('INV')?'INV — France (100%)':r.outbRate>=30?'RET — Y1 (30%)':r.outbRate>0?'RET — Y2 (20%)':'Sans taux';
+    const group=r.number.startsWith('INV')&&r.has_contract?'INV — France (100%)':r.outbRate>=30?'RET — Y1 (30%)':r.outbRate>0?'RET — Y2 (20%)':r.has_contract?'Sans taux':'Sans contrat';
     const sep=group!==lastGroup?(lastGroup!==null?`<tr><td colspan="11" style="padding:4px 10px;font-size:11px;font-weight:600;color:#888;background:#f5f5f3;border-bottom:1px solid #e5e5e3;letter-spacing:.04em;text-transform:uppercase">${group}</td></tr>`:`<tr><td colspan="11" style="padding:4px 10px;font-size:11px;font-weight:600;color:#888;background:#f5f5f3;border-bottom:1px solid #e5e5e3;letter-spacing:.04em;text-transform:uppercase">${group}</td></tr>`):'';
     lastGroup=group;
     const idx=allBDs.indexOf(r.bd);
