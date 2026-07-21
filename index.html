@@ -97,7 +97,7 @@ tr:hover td{background:#fafaf8}
 
 <div class="header">
   <span class="header-logo">Altios <span>·</span> Commissions BD</span>
-  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.7</span></span>
+  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.8</span></span>
 </div>
 
 <!-- UPLOAD SCREEN -->
@@ -472,7 +472,13 @@ async function processFiles(){
               outbRate=diffYears<1?contract.y1_outb_rate:contract.y2_outb_rate;
               if(outbRate&&outbRate>0&&outbRate<100)grossAmount=r.amount/(outbRate/100);
             }
-            return{...r,contractRef:originRef,grossAmount,outbRate,warning,customer:contract.customer||'',invoicing_entity:contract.invoicing_entity||'',bd:contract.salesperson||'',rate:contract.commission||0,has_contract:true};
+            const invHTx=(r.c706100||0)+(r.c706200||0)+(r.c706other||0);
+            const commissionBasex=isINV2?(invHTx>0?invHTx:r.amount):(
+              (r.c706100>0||r.c706200>0)&&outbRate&&outbRate>0&&outbRate<100
+                ?(r.c706100*(1/(outbRate/100))+Math.min((r.c706200||0)*(1/(outbRate/100)),400))
+                :grossAmount
+            );
+            return{...r,contractRef:originRef,grossAmount,commissionBase:commissionBasex,outbRate,warning,customer:contract.customer||'',invoicing_entity:contract.invoicing_entity||'',bd:contract.salesperson||'',rate:contract.commission||0,has_contract:true,c706100:r.c706100||0,c706200:r.c706200||0,c706other:r.c706other||0};
           }
         }
       }
