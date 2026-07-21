@@ -97,7 +97,7 @@ tr:hover td{background:#fafaf8}
 
 <div class="header">
   <span class="header-logo">Altios <span>·</span> Commissions BD</span>
-  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.2</span></span>
+  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.3</span></span>
 </div>
 
 <!-- UPLOAD SCREEN -->
@@ -263,6 +263,7 @@ const BGCOL=['#E6F1FB','#E1F5EE','#FAECE7','#EEEDFE','#FAEEDA','#FBEAF0','#EAF3D
 let files={invoices:null,contracts:null,so:null};
 let allData=[];
 let rateOverrides={};
+let bdOverrides={};
 let chartInst=null;
 
 // ---- FILE HANDLING ----
@@ -433,7 +434,7 @@ async function processFiles(){
 
       return{number,date,month,ref,contractRef,originInvoice,amount,grossAmount,commissionBase,outbRate,warning,c706100,c706200,
         customer:contract.customer||'',invoicing_entity:contract.invoicing_entity||'',
-        bd:contract.salesperson||'',rate:contract.commission||0,
+        bd:contract.salesperson||'',rate:contract.commission||0,bdOrig:contract.salesperson||'',
         has_contract:!!(contractRef&&contract.salesperson)};
     }).filter(r=>r.number);
 
@@ -597,7 +598,13 @@ function renderDetail(rows,allBDs){
       <td>${r.contractRef?`<span class="badge ba">${r.contractRef}</span>`:'<span class="muted">—</span>'}</td>
       <td title="${r.customer}">${r.customer||'<span class="muted">—</span>'}</td>
       <td title="${r.invoicing_entity}">${r.invoicing_entity?shortEntity(r.invoicing_entity):'<span class="muted">—</span>'}</td>
-      <td>${r.bd?`<span class="av" style="background:${bg};color:${col}">${initials(r.bd)}</span>${r.bd}`:'<span class="muted">—</span>'}</td>
+      <td>${(()=>{
+        const isAdmin=r.bd==='Administrator'||r.bd==='-  EU Admin DACO'||r.bd==='- EU Admin DACO';
+        if(!r.bd)return '<span class="muted">—</span>';
+        if(!isAdmin)return `<span class="av" style="background:${bg};color:${col}">${initials(r.bd)}</span>${r.bd}`;
+        const opts=allBDs.filter(b=>b!=='Administrator'&&b!=='-  EU Admin DACO'&&b!=='- EU Admin DACO'&&b!=='Controlling Team').map(b=>`<option value="${b}"${bdOverrides[r.number]===b?' selected':''}>${b}</option>`).join('');
+        return `<select class="bd-select" data-num="${r.number}" onchange="updateBD(this)" style="font-size:12px;padding:3px 6px;border-radius:6px;border:1px solid #d0d0cc;background:#fff;max-width:130px"><option value="">⚠️ ${r.bd}</option>${opts}</select>`;
+      })()}</td>
       <td class="r">${(()=>{
         const hasLines=r.c706100>0||r.c706200>0;
         const showGross=r.grossAmount&&r.grossAmount!==r.amount;
@@ -618,6 +625,10 @@ function renderDetail(rows,allBDs){
   }).join('');
 }
 
+function updateBD(el){
+  bdOverrides[el.dataset.num]=el.value;
+  render();
+}
 function updateRate(el){
   rateOverrides[el.dataset.num]=parseFloat(el.value)||0;
   render();
@@ -698,7 +709,7 @@ function exportCSV(){
 
 // ---- RESET ----
 function resetDashboard(){
-  files={invoices:null,contracts:null,so:null};allData=[];rateOverrides={};
+  files={invoices:null,contracts:null,so:null};allData=[];rateOverrides={};bdOverrides={};
   document.getElementById('invoiceFileName').textContent='';
   document.getElementById('contractFileName').textContent='';
   document.getElementById('soFileName').textContent='';
