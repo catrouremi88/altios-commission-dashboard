@@ -83,6 +83,11 @@ tr:hover td{background:#fafaf8}
 .muted{color:#bbb;font-size:11px}
 .info-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#888;background:#f5f5f3;padding:3px 9px;border-radius:6px}
 .no-data{text-align:center;padding:2rem;color:#aaa;font-size:13px}
+.tooltip-wrap{position:relative;display:inline-flex;align-items:center;gap:4px}
+.tooltip-icon{cursor:pointer;color:#378ADD;font-size:13px;flex-shrink:0}
+.tooltip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;border-radius:8px;padding:8px 12px;font-size:11px;white-space:nowrap;z-index:100;line-height:1.8;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.tooltip-box::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1a1a1a}
+.tooltip-wrap:hover .tooltip-box,.tooltip-wrap.active .tooltip-box{display:block}
 </style>
 </head>
 <body>
@@ -423,7 +428,7 @@ async function processFiles(){
         commissionBase=c706100*factor+Math.min(c706200*factor,400);
       }
 
-      return{number,date,month,ref,contractRef,originInvoice,amount,grossAmount,commissionBase,outbRate,warning,
+      return{number,date,month,ref,contractRef,originInvoice,amount,grossAmount,commissionBase,outbRate,warning,c706100,c706200,
         customer:contract.customer||'',invoicing_entity:contract.invoicing_entity||'',
         bd:contract.salesperson||'',rate:contract.commission||0,
         has_contract:!!(contractRef&&contract.salesperson)};
@@ -484,6 +489,7 @@ function computeCom(r){
   return base*(computeRate(r)/100);
 }
 
+function toggleTip(el){el.parentNode.classList.toggle('active')}
 // ---- RENDER ----
 function fmtEur(n){return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n)}
 function fmtPct(n){return parseFloat(n).toFixed(1)+'%'}
@@ -576,7 +582,21 @@ function renderDetail(rows,allBDs){
       <td title="${r.customer}">${r.customer||'<span class="muted">—</span>'}</td>
       <td title="${r.invoicing_entity}">${r.invoicing_entity?shortEntity(r.invoicing_entity):'<span class="muted">—</span>'}</td>
       <td>${r.bd?`<span class="av" style="background:${bg};color:${col}">${initials(r.bd)}</span>${r.bd}`:'<span class="muted">—</span>'}</td>
-      <td class="r">${r.grossAmount&&r.grossAmount!==r.amount?'<span style="font-weight:600">'+fmtEur(r.grossAmount)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+((r.outbRate||0).toFixed(0))+'%)</span>':fmtEur(r.amount)}</td>
+      <td class="r">${(()=>{
+        const hasLines=r.c706100>0||r.c706200>0;
+        const showGross=r.grossAmount&&r.grossAmount!==r.amount;
+        const brutDisplay=showGross?'<span style="font-weight:600">'+fmtEur(r.commissionBase||r.grossAmount)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+((r.outbRate||0).toFixed(0))+'%)</span>':fmtEur(r.amount);
+        if(!hasLines||!showGross)return brutDisplay;
+        const factor=r.outbRate?1/(r.outbRate/100):1;
+        const g100=(r.c706100*factor).toFixed(2);
+        const g200raw=(r.c706200*factor).toFixed(2);
+        const g200cap=Math.min(r.c706200*factor,400).toFixed(2);
+        const capped=r.c706200*factor>400;
+        const tip='706100 : '+fmtEur(r.c706100)+' ÷ '+r.outbRate+'% = '+fmtEur(g100)
+          +'&#10;706200 : '+fmtEur(r.c706200)+' ÷ '+r.outbRate+'% = '+fmtEur(g200raw)+(capped?' → plafonné '+fmtEur(400):'')
+          +'&#10;Base commission = '+fmtEur(r.commissionBase);
+        return '<span class="tooltip-wrap"><span style="font-weight:600">'+fmtEur(r.commissionBase)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+r.outbRate+'%)</span><span class="tooltip-icon" onclick="toggleTip(this)" title="Détail calcul">ℹ️</span><span class="tooltip-box">'+tip+'</span></span>';
+      })()}</td>
       <td class="r"><input class="edit-rate" type="number" min="0" max="100" step="0.5" value="${rate}" data-num="${r.number}" onchange="updateRate(this)"></td>
       <td class="r" style="font-weight:600">${com?fmtEur(com):'—'}</td>
       <td>${(r.warning==='100'||r.warning==='mixed')&&!r.number.startsWith('INV')?'<span class="badge '+(r.warning==='100'?'br" title="Seules des lignes à 100% — pas de taux valide">❌ 100%':'ba" title="Contrat mixte 100% + taux valide">⚠️ Mixte')+'</span>':'<span class="badge bg">✓</span>'}</td>
