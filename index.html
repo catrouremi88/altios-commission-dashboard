@@ -97,7 +97,7 @@ tr:hover td{background:#fafaf8}
 
 <div class="header">
   <span class="header-logo">Altios <span>·</span> Commissions BD</span>
-  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.9</span></span>
+  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v2.1</span></span>
 </div>
 
 <!-- UPLOAD SCREEN -->
@@ -406,7 +406,7 @@ async function processFiles(){
       // Process account line (can be on same row as invoice header or on continuation rows)
       if(account.includes('706100'))invoiceAgg[currentInvNum].c706100+=credit;
       else if(account.includes('706200'))invoiceAgg[currentInvNum].c706200+=credit;
-      else if(account&&account.match(/^706/))invoiceAgg[currentInvNum].c706other+=credit;
+      else if(account&&account.match(/^706/)&&!account.includes('706010'))invoiceAgg[currentInvNum].c706other+=credit;
     });
 
     const invoiceToContract={};
@@ -623,10 +623,15 @@ function renderDetail(rows,allBDs){
       <td title="${r.invoicing_entity}">${r.invoicing_entity?shortEntity(r.invoicing_entity):'<span class="muted">—</span>'}</td>
       <td>${(()=>{
         const isAdmin=r.bd==='Administrator'||r.bd==='-  EU Admin DACO'||r.bd==='- EU Admin DACO';
-        if(!r.bd)return '<span class="muted">—</span>';
-        if(!isAdmin)return `<span class="av" style="background:${bg};color:${col}">${initials(r.bd)}</span>${r.bd}`;
-        const opts=allBDs.filter(b=>b!=='Administrator'&&b!=='-  EU Admin DACO'&&b!=='- EU Admin DACO'&&b!=='Controlling Team').map(b=>`<option value="${b}"${bdOverrides[r.number]===b?' selected':''}>${b}</option>`).join('');
-        return `<select class="bd-select" data-num="${r.number}" onchange="updateBD(this)" style="font-size:12px;padding:3px 6px;border-radius:6px;border:1px solid #d0d0cc;background:#fff;max-width:130px"><option value="">⚠️ ${r.bd}</option>${opts}</select>`;
+        const noContract=!r.has_contract;
+        const needsSelect=isAdmin||noContract;
+        const cleanBDs=allBDs.filter(b=>b!=='Administrator'&&b!=='-  EU Admin DACO'&&b!=='- EU Admin DACO'&&b!=='Controlling Team');
+        if(!needsSelect&&!r.bd)return '<span class="muted">—</span>';
+        if(!needsSelect)return `<span class="av" style="background:${bg};color:${col}">${initials(r.bd)}</span>${r.bd}`;
+        const currentBD=bdOverrides[r.number]||'';
+        const placeholder=isAdmin?`⚠️ ${r.bd}`:'— Assigner BD';
+        const opts=cleanBDs.map(b=>`<option value="${b}"${currentBD===b?' selected':''}>${b}</option>`).join('');
+        return `<select class="bd-select" data-num="${r.number}" onchange="updateBD(this)" style="font-size:12px;padding:3px 6px;border-radius:6px;border:1px solid #d0d0cc;background:#fff;max-width:130px"><option value="">${placeholder}</option>${opts}</select>`;
       })()}</td>
       <td class="r">${(()=>{
         const hasLines=r.c706100>0||r.c706200>0;
