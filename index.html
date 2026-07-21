@@ -138,6 +138,7 @@ tr:hover td{background:#fafaf8}
           <li>· Invoice/Bill Date</li>
           <li>· Reference</li>
           <li>· Total in Currency Signed</li>
+          <li>· Origin <span style="color:#aaa">(pour les INV)</span></li>
         </ul>
       </div>
       <div>
@@ -372,20 +373,22 @@ async function processFiles(){
       const month=date?date.slice(0,7):'';
       const ref=String(r['Reference']||r['ref']||'');
       const amount=parseFloat(r['Total in Currency Signed']||r['amount_untaxed']||0)||0;
+      const originField=String(r['Origin']||r['invoice_origin']||r['origin']||'').trim();
       let contractRef=extractContractRef(ref);
       const originInvoice=extractOriginInvoice(ref);
       // For INV invoices: look up contract via SO number in Origin field
-      const soNumber=String(r['Origin']||'').trim();
+      const soNumber=originField;
       if(!contractRef&&number.startsWith('INV')&&soNumber&&soMap[soNumber]){
         contractRef=soMap[soNumber];
       }
       const contract=contractMap[contractRef]||{};
       if(contractRef&&contract.salesperson)invoiceToContract[number]=contractRef;
-      // Compute gross amount using y1/y2 outb rate and first invoice date
+      // Compute gross amount using y1/y2 outb rate — only for RET invoices
       let grossAmount=amount;
       let outbRate=null;
       let warning=contract.warning||false;
-      if(contract.y1_outb_rate&&contract.first_invoice_date&&amount){
+      const isRET=number.startsWith('RET')||number.startsWith('RRET');
+      if(isRET&&contract.y1_outb_rate&&contract.first_invoice_date&&amount){
         const firstDate=new Date(contract.first_invoice_date);
         const invDate=new Date(date);
         const diffYears=(invDate-firstDate)/(1000*60*60*24*365);
@@ -403,7 +406,8 @@ async function processFiles(){
           const contract=contractMap[originRef]||{};
           if(contract.salesperson){
             let grossAmount=r.amount;let outbRate=null;let warning=contract.warning||false;
-            if(contract.y1_outb_rate&&contract.first_invoice_date&&r.amount){
+            const isRET2=r.number.startsWith('RET')||r.number.startsWith('RRET');
+            if(isRET2&&contract.y1_outb_rate&&contract.first_invoice_date&&r.amount){
               const firstDate=new Date(contract.first_invoice_date);const invDate=new Date(r.date);
               const diffYears=(invDate-firstDate)/(1000*60*60*24*365);
               outbRate=diffYears<1?contract.y1_outb_rate:contract.y2_outb_rate;
@@ -444,7 +448,10 @@ function getFiltered(){
 }
 
 function computeRate(r){return rateOverrides[r.number]!==undefined?rateOverrides[r.number]:r.rate}
-function computeCom(r){return(r.grossAmount||r.amount)*(computeRate(r)/100)}
+function computeCom(r){
+  const base=r.number.startsWith('INV')?r.amount:(r.grossAmount||r.amount);
+  return base*(computeRate(r)/100);
+}
 
 // ---- RENDER ----
 function fmtEur(n){return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n)}
@@ -501,12 +508,14 @@ function renderSynth(rows,allBDs){
   }).join('')+`<tr class="trow-tot"><td>Total</td><td class="r">${tN}</td><td class="r">${fmtEur(tA)}</td><td class="r">${fmtEur(tC)}</td><td class="r">—</td></tr>`;
 }
 
+function getGroup(r){
+  if(r.number.startsWith('INV'))return 0; // INV France always top
+  if(r.outbRate>=30)return 1; // Y1 30%
+  if(r.outbRate>0)return 2;   // Y2 20%
+  return 99;                   // no rate
+}
 function sortRows(rows){
-  return [...rows].sort((a,b)=>{
-    const ga=a.outbRate===null||a.outbRate===undefined?99:(a.outbRate>=30?0:a.outbRate>0?1:2);
-    const gb=b.outbRate===null||b.outbRate===undefined?99:(b.outbRate>=30?0:b.outbRate>0?1:2);
-    return ga-gb;
-  });
+  return [...rows].sort((a,b)=>getGroup(a)-getGroup(b));
 }
 function renderDetail(rows,allBDs){
   rows=sortRows(rows);
@@ -515,7 +524,7 @@ function renderDetail(rows,allBDs){
   let lastGroup=null;
   tbody.innerHTML=rows.map(r=>{
     const rate=computeRate(r);const com=computeCom(r);
-    const group=r.outbRate>=30?'Y1 (30%)':r.outbRate>0?'Y2 (20%)':'Sans taux';
+    const group=r.number.startsWith('INV')?'INV — France (100%)':r.outbRate>=30?'RET — Y1 (30%)':r.outbRate>0?'RET — Y2 (20%)':'Sans taux';
     const sep=group!==lastGroup?(lastGroup!==null?`<tr><td colspan="11" style="padding:4px 10px;font-size:11px;font-weight:600;color:#888;background:#f5f5f3;border-bottom:1px solid #e5e5e3;letter-spacing:.04em;text-transform:uppercase">${group}</td></tr>`:`<tr><td colspan="11" style="padding:4px 10px;font-size:11px;font-weight:600;color:#888;background:#f5f5f3;border-bottom:1px solid #e5e5e3;letter-spacing:.04em;text-transform:uppercase">${group}</td></tr>`):'';
     lastGroup=group;
     const idx=allBDs.indexOf(r.bd);
@@ -531,7 +540,7 @@ function renderDetail(rows,allBDs){
       <td class="r">${r.grossAmount&&r.grossAmount!==r.amount?'<span style="font-weight:600">'+fmtEur(r.grossAmount)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+((r.outbRate||0).toFixed(0))+'%)</span>':fmtEur(r.amount)}</td>
       <td class="r"><input class="edit-rate" type="number" min="0" max="100" step="0.5" value="${rate}" data-num="${r.number}" onchange="updateRate(this)"></td>
       <td class="r" style="font-weight:600">${com?fmtEur(com):'—'}</td>
-      <td>${r.warning==='100'?'<span class="badge br" title="Seules des lignes à 100% trouvées — pas de taux valide">❌ 100%</span>':r.warning==='mixed'?'<span class="badge ba" title="Contrat mixte : lignes 100% ET lignes valides — taux valide utilisé">⚠️ Mixte</span>':'<span class="badge bg">✓</span>'}</td>
+      <td>${(r.warning==='100'||r.warning==='mixed')&&!r.number.startsWith('INV')?'<span class="badge '+(r.warning==='100'?'br" title="Seules des lignes à 100% — pas de taux valide">❌ 100%':'ba" title="Contrat mixte 100% + taux valide">⚠️ Mixte')+'</span>':'<span class="badge bg">✓</span>'}</td>
     </tr>`;
   }).join('');
 }
