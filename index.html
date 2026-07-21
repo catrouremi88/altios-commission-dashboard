@@ -97,7 +97,7 @@ tr:hover td{background:#fafaf8}
 
 <div class="header">
   <span class="header-logo">Altios <span>·</span> Commissions BD</span>
-  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v2.1</span></span>
+  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v2.3</span></span>
 </div>
 
 <!-- UPLOAD SCREEN -->
@@ -536,8 +536,10 @@ function fmtPct(n){return parseFloat(n).toFixed(1)+'%'}
 function initials(n){if(!n)return'?';return n.split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)}
 
 function render(){
+  // Apply BD overrides to allData before filtering
+  allData.forEach(r=>{r.bd=bdOverrides[r.number]||r.bdOrig||'';});
   const rows=getFiltered();
-  const allBDs=[...new Set(allData.filter(r=>r.bd).map(r=>r.bd))].sort();
+  const allBDs=[...new Set(allData.filter(r=>r.bd&&r.bd!=='Administrator'&&r.bd!=='-  EU Admin DACO'&&r.bd!=='- EU Admin DACO'&&r.bd!=='Controlling Team').map(r=>r.bd))].sort();
 
   let totAmt=0,totCom=0,matchCt=0;
   rows.forEach(r=>{totAmt+=(r.grossAmount||r.amount);totCom+=computeCom(r);if(r.has_contract)matchCt++;});
@@ -622,7 +624,7 @@ function renderDetail(rows,allBDs){
       <td title="${r.customer}">${r.customer||'<span class="muted">—</span>'}</td>
       <td title="${r.invoicing_entity}">${r.invoicing_entity?shortEntity(r.invoicing_entity):'<span class="muted">—</span>'}</td>
       <td>${(()=>{
-        const isAdmin=r.bd==='Administrator'||r.bd==='-  EU Admin DACO'||r.bd==='- EU Admin DACO';
+        const isAdmin=r.bd==='Administrator'||r.bd==='-  EU Admin DACO'||r.bd==='- EU Admin DACO'||r.bd==='Controlling Team';
         const noContract=!r.has_contract;
         const needsSelect=isAdmin||noContract;
         const cleanBDs=allBDs.filter(b=>b!=='Administrator'&&b!=='-  EU Admin DACO'&&b!=='- EU Admin DACO'&&b!=='Controlling Team');
