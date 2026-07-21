@@ -83,18 +83,21 @@ tr:hover td{background:#fafaf8}
 .muted{color:#bbb;font-size:11px}
 .info-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#888;background:#f5f5f3;padding:3px 9px;border-radius:6px}
 .no-data{text-align:center;padding:2rem;color:#aaa;font-size:13px}
-.tooltip-wrap{position:relative;display:inline-flex;align-items:center;gap:4px}
-.tooltip-icon{cursor:pointer;color:#378ADD;font-size:13px;flex-shrink:0}
-.tooltip-box{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;border-radius:8px;padding:8px 12px;font-size:11px;white-space:nowrap;z-index:100;line-height:1.8;box-shadow:0 4px 12px rgba(0,0,0,.2)}
-.tooltip-box::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1a1a1a}
-.tooltip-wrap:hover .tooltip-box,.tooltip-wrap.active .tooltip-box{display:block}
+.tip-icon{cursor:pointer;color:#378ADD;font-size:13px;margin-left:4px;vertical-align:middle}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal-box{background:#fff;border-radius:12px;padding:1.25rem 1.5rem;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.modal-title{font-size:13px;font-weight:600;margin-bottom:.75rem;color:#1a1a1a}
+.modal-row{display:flex;justify-content:space-between;gap:1rem;font-size:13px;padding:4px 0;border-bottom:1px solid #f0f0ee}
+.modal-row:last-child{border-bottom:none;font-weight:600;padding-top:8px}
+.modal-close{float:right;cursor:pointer;color:#aaa;font-size:16px;line-height:1}
 </style>
 </head>
 <body>
 
 <div class="header">
   <span class="header-logo">Altios <span>·</span> Commissions BD</span>
-  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée</span>
+  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.2</span></span>
 </div>
 
 <!-- UPLOAD SCREEN -->
@@ -489,7 +492,20 @@ function computeCom(r){
   return base*(computeRate(r)/100);
 }
 
-function toggleTip(el){el.parentNode.classList.toggle('active')}
+function openModal(c706100,c706200,outbRate,commissionBase){
+  const factor=1/(outbRate/100);
+  const g100=(c706100*factor);
+  const g200raw=(c706200*factor);
+  const g200cap=Math.min(g200raw,400);
+  const capped=g200raw>400;
+  let html='';
+  html+='<div class="modal-row"><span>706100 : '+fmtEur(c706100)+' ÷ '+outbRate+'%</span><span>= '+fmtEur(g100)+'</span></div>';
+  html+='<div class="modal-row"><span>706200 : '+fmtEur(c706200)+' ÷ '+outbRate+'%'+(capped?' (plafonné 400€)':'')+'</span><span>= '+fmtEur(g200cap)+'</span></div>';
+  html+='<div class="modal-row"><span>Base commission</span><span>'+fmtEur(commissionBase)+'</span></div>';
+  document.getElementById('modalContent').innerHTML=html;
+  document.getElementById('calcModal').classList.add('open');
+}
+function closeModal(){document.getElementById('calcModal').classList.remove('open');}
 // ---- RENDER ----
 function fmtEur(n){return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n)}
 function fmtPct(n){return parseFloat(n).toFixed(1)+'%'}
@@ -592,10 +608,8 @@ function renderDetail(rows,allBDs){
         const g200raw=(r.c706200*factor).toFixed(2);
         const g200cap=Math.min(r.c706200*factor,400).toFixed(2);
         const capped=r.c706200*factor>400;
-        const tip='<b>706100</b> : '+fmtEur(r.c706100)+' ÷ '+r.outbRate+'% = '+fmtEur(g100)
-          +'<br><b>706200</b> : '+fmtEur(r.c706200)+' ÷ '+r.outbRate+'% = '+fmtEur(g200raw)+(capped?' → plafonné '+fmtEur(400):'')
-          +'<br><b>Base commission</b> = '+fmtEur(r.commissionBase);
-        return '<span class="tooltip-wrap"><span style="font-weight:600">'+fmtEur(r.commissionBase)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+r.outbRate+'%)</span><span class="tooltip-icon" onclick="toggleTip(this)" title="Détail calcul">ℹ️</span><span class="tooltip-box">'+tip+'</span></span>';
+
+        return '<span style="font-weight:600">'+fmtEur(r.commissionBase)+'</span><span style="font-size:10px;color:#aaa;margin-left:3px">('+r.outbRate+'%)</span><span class="tip-icon" onclick="openModal('+r.c706100+','+r.c706200+','+r.outbRate+','+r.commissionBase+')" title="Détail calcul">ℹ️</span>';
       })()}</td>
       <td class="r"><input class="edit-rate" type="number" min="0" max="100" step="0.5" value="${rate}" data-num="${r.number}" onchange="updateRate(this)"></td>
       <td class="r" style="font-weight:600">${com?fmtEur(com):'—'}</td>
@@ -696,5 +710,11 @@ function resetDashboard(){
   document.getElementById('uploadScreen').style.display='flex';
 }
 </script>
+<div class="modal-overlay" id="calcModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-title">Détail du calcul <span class="modal-close" onclick="closeModal()">✕</span></div>
+    <div id="modalContent"></div>
+  </div>
+</div>
 </body>
 </html>
