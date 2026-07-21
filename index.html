@@ -97,7 +97,7 @@ tr:hover td{background:#fafaf8}
 
 <div class="header">
   <span class="header-logo">Altios <span>·</span> Commissions BD</span>
-  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.3</span></span>
+  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.4</span></span>
 </div>
 
 <!-- UPLOAD SCREEN -->
@@ -391,17 +391,19 @@ async function processFiles(){
           ref:String(r['Reference']||''),
           amount:parseFloat(r['Total in Currency Signed']||0)||0,
           originField:String(r['Origin']||r['invoice_origin']||'').trim(),
-          c706100:0,c706200:0
+          c706100:0,c706200:0,c706other:0
         };
       }
       if(!currentInvNum)return;
       if(account.includes('706100'))invoiceAgg[currentInvNum].c706100+=credit;
-      if(account.includes('706200'))invoiceAgg[currentInvNum].c706200+=credit;
+      else if(account.includes('706200'))invoiceAgg[currentInvNum].c706200+=credit;
+      else if(account.match(/^706/))invoiceAgg[currentInvNum].c706other+=credit;
     });
 
     const invoiceToContract={};
     const rawRows=Object.values(invoiceAgg).map(inv=>{
       const{number,date,ref,amount,originField,c706100,c706200}=inv;
+      const c706other=inv.c706other||0;
       const month=date?date.slice(0,7):'';
       let contractRef=extractContractRef(ref);
       const originInvoice=extractOriginInvoice(ref);
@@ -425,8 +427,12 @@ async function processFiles(){
         if(outbRate&&outbRate>0&&outbRate<100)grossAmount=amount/(outbRate/100);
       }
 
+      // For INV: use 706xxx lines as HT base (avoids TTC in Total in Currency Signed)
+      const invHT=c706100+c706200+(inv.c706other||0);
+      const invBase=number.startsWith('INV')&&invHT>0?invHT:amount;
+
       // Commission base: 706100 + min(706200, 400€) reconstituted — RET only
-      let commissionBase=number.startsWith('INV')?amount:grossAmount;
+      let commissionBase=number.startsWith('INV')?invBase:grossAmount;
       if(isRET&&(c706100>0||c706200>0)&&outbRate&&outbRate>0&&outbRate<100){
         const factor=1/(outbRate/100);
         commissionBase=c706100*factor+Math.min(c706200*factor,400);
