@@ -97,7 +97,7 @@ tr:hover td{background:#fafaf8}
 
 <div class="header">
   <span class="header-logo">Altios <span>·</span> Commissions BD</span>
-  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.8</span></span>
+  <span style="font-size:12px;color:#aaa">Données locales — aucune donnée envoyée &nbsp;·&nbsp; <span style="color:#378ADD">v1.9</span></span>
 </div>
 
 <!-- UPLOAD SCREEN -->
@@ -379,7 +379,7 @@ async function processFiles(){
     // Build SO map: SO number -> contract ref
     const soMap={};
     (soRows||[]).forEach(r=>{
-      const soNum=String(r['Order Reference']||r['name']||'').trim();
+      const soNum=String(r['Order Reference']||r['Référence de commande']||r['name']||'').trim();
       const contractRef=String(r['Sale Contract']||'').trim();
       if(soNum&&contractRef&&!soMap[soNum])soMap[soNum]=contractRef;
     });
@@ -388,17 +388,17 @@ async function processFiles(){
     const invoiceAgg={};
     let currentInvNum=null;
     allInvRows.forEach(r=>{
-      const number=String(r['Number']||'').trim();
-      const account=String(r['Invoice lines/Account']||'').trim();
-      const credit=parseFloat(r['Invoice lines/Credit']||0)||0;
+      const number=String(r['Number']||r['Numéro']||'').trim();
+      const account=String(r['Invoice lines/Account']||r['Lignes de facture/Compte']||'').trim();
+      const credit=parseFloat(r['Invoice lines/Credit']||r['Lignes de facture/Crédit']||0)||0;
       if(number){
         currentInvNum=number;
         invoiceAgg[number]={
           number,
-          date:formatDate(r['Invoice/Bill Date']||''),
-          ref:String(r['Reference']||''),
-          amount:parseFloat(r['Total in Currency Signed']||0)||0,
-          originField:String(r['Origin']||r['invoice_origin']||'').trim(),
+          date:formatDate(r['Invoice/Bill Date']||r['Date de facturation']||''),
+          ref:String(r['Reference']||r['Référence']||''),
+          amount:parseFloat(r['Total in Currency Signed']||r['Total signé en devises']||0)||0,
+          originField:String(r['Origin']||r['Origine']||r['invoice_origin']||'').trim(),
           c706100:0,c706200:0,c706other:0
         };
       }
